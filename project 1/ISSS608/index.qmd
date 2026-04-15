@@ -1,5 +1,5 @@
 ---
-title: "ISSS608-VAA"
+title: "ISSS608"
 ---
 
 This is a Quarto website.
