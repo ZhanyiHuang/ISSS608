@@ -26,14 +26,16 @@ pacman::p_load(tidyverse)
 exam_data <- read_csv("data/Exam_data.csv")
 ```
 
-# Plotting a simple bar chart
+## Plotting a simple bar chart
 
 ```{r}
 ggplot(data = exam_data,
        aes(x = RACE)) + 
   geom_bar()
 ```
-#ggplot
+
+##ggplot
+
 ```{r}
 ggplot(data=exam_data)
 ```
@@ -43,27 +45,28 @@ ggplot(data=exam_data,
        aes(x= MATHS))
 ```
 
-
 ```{r}
 ggplot(data=exam_data, 
        aes(x= MATHS))
 ```
 
-#geom_bar
+##geom_bar
+
 ```{r}
 ggplot(data=exam_data, 
        aes(x=RACE)) +
   geom_bar()
 ```
+
 ```{r}
 exam_data$MATHS <- as.numeric(exam_data$MATHS)
 
 ```
+
 ```{r}
 exam_data$ENGLISH <- as.numeric(exam_data$ENGLISH)
 
 ```
-
 
 ```{r}
 ggplot(data=exam_data, 
@@ -79,7 +82,9 @@ ggplot(data=exam_data,
   scale_y_continuous(NULL,           
                      breaks = NULL)  
 ```
-#geom_histogram()
+
+##geom_histogram()
+
 ```{r}
 ggplot(data=exam_data, 
        aes(x = MATHS)) +
