@@ -13,6 +13,7 @@ execute:
 ## Loading Required Libraries
 
 ```{r}
+
 pacman::p_load(ggrepel, patchwork, 
                ggthemes, hrbrthemes,
                tidyverse) 
@@ -23,6 +24,7 @@ pacman::p_load(ggrepel, patchwork,
 ```{r}
 exam_data <- read_csv("/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex02/data/Exam_data.csv")
 ```
+
 ```{r}
 exam_data$MATHS <- as.numeric(exam_data$MATHS)
 
@@ -32,13 +34,17 @@ exam_data$MATHS <- as.numeric(exam_data$MATHS)
 exam_data$ENGLISH <- as.numeric(exam_data$ENGLISH)
 
 ```
+
 ## ggrepel
+
 ```{r}
 colnames(exam_data)
 ```
 
+::: {style="font-size = 1.4em"}
 ```{r}
 # fixed the codes by replacing ID with NAME in the label
+#| echo: false
 ggplot(data=exam_data, 
        aes(x= MATHS, 
            y=ENGLISH)) +
@@ -52,8 +58,15 @@ ggplot(data=exam_data,
                   ylim=c(0,100)) +
   ggtitle("English scores versus Maths scores for Primary 3")
 ```
+:::
+::::
 
+:::: panel-tabset
+
+::::
 ```{r}
+#| fig-width: 12
+#| gif-height: 8
 ggplot(data=exam_data, 
        aes(x= MATHS, 
            y=ENGLISH)) +
@@ -66,7 +79,9 @@ ggplot(data=exam_data,
                   ylim=c(0,100)) +
   ggtitle("English scores versus Maths scores for Primary 3")
 ```
+
 ## GGplot2
+
 ```{r}
 ggplot(data=exam_data, 
              aes(x = MATHS)) +
@@ -77,7 +92,9 @@ ggplot(data=exam_data,
   theme_gray() +
   ggtitle("Distribution of Maths scores") 
 ```
+
 ## GGtheme
+
 ```{r}
 ggplot(data=exam_data, 
              aes(x = MATHS)) +
@@ -90,6 +107,7 @@ ggplot(data=exam_data,
 ```
 
 ## Hrbthems package
+
 ```{r}
 ggplot(data=exam_data, 
              aes(x = MATHS)) +
@@ -102,6 +120,7 @@ ggplot(data=exam_data,
 ```
 
 ## Beyond Single Graphs
+
 ```{r}
 p1 <- ggplot(data=exam_data, 
              aes(x = MATHS)) +
@@ -140,16 +159,19 @@ p3
 ```
 
 ### Combining two ggplot2 graphs
+
 ```{r}
 p1 + p2
 ```
 
 ### Combinig three ggplot2 graphs
+
 ```{r}
 (p1 / p2) | p3
 ```
 
 ### Creating figure with insert
+
 ```{r}
 p3 + inset_element(p2, 
                    left = 0.02, 
@@ -159,8 +181,8 @@ p3 + inset_element(p2,
 ```
 
 ### Creating a composite figure by using patchwork and ggtheme
+
 ```{r}
 patchwork <- (p1 / p2) | p3
 patchwork & theme_economist()
 ```
-
