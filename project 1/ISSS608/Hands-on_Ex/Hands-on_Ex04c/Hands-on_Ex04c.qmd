@@ -186,8 +186,9 @@ exam %>%
 #### install and launch
 
 ```{r}
-install.packages("devtools")
+#install.packages("devtools")
 devtools::install_github("wilkelab/ungeviz")
+library(ungeviz)
 ```
 
 ```{r}
