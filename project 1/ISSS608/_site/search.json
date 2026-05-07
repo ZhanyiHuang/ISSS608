@@ -116,7 +116,7 @@
     "href": "Hands-on_Ex/Hands-on_Ex02/Hands-on_Ex02.html#beyond-single-graphs",
     "title": "Hands-on_Ex02",
     "section": "Beyond Single Graphs",
-    "text": "Beyond Single Graphs\n\np1 &lt;- ggplot(data=exam_data, \n             aes(x = MATHS)) +\n  geom_histogram(bins=20, \n                 boundary = 100,\n                 color=\"grey25\", \n                 fill=\"grey90\") + \n  coord_cartesian(xlim=c(0,100)) +\n  ggtitle(\"Distribution of Maths scores\")\np1\n\n\n\n\n\n\n\n\n\np2 &lt;- ggplot(data=exam_data, \n             aes(x = ENGLISH)) +\n  geom_histogram(bins=20, \n                 boundary = 100,\n                 color=\"grey25\", \n                 fill=\"grey90\") +\n  coord_cartesian(xlim=c(0,100)) +\n  ggtitle(\"Distribution of English scores\")\np2\n\n\n\n\n\n\n\n\n\np3 &lt;- ggplot(data=exam_data, \n             aes(x= MATHS, \n                 y=ENGLISH)) +\n  geom_point() +\n  geom_smooth(method=lm, \n              size=0.5) +  \n  coord_cartesian(xlim=c(0,100),\n                  ylim=c(0,100)) +\n  ggtitle(\"English scores versus Maths scores for Primary 3\")\np3\n\n\n\n\n\n\n\n\n\nCombining two ggplot2 graphs\n\np1 + p2\n\n\n\n\n\n\n\n\n\n\nCombinig three ggplot2 graphs\n\n(p1 / p2) | p3\n\n\n\n\n\n\n\n\n\n\nCreating figure with insert\n\np3 + inset_element(p2, \n                   left = 0.02, \n                   bottom = 0.7, \n                   right = 0.5, \n                   top = 1)\n\n\n\n\n\n\n\n\n\n\nCreating a composite figure by using patchwork and ggtheme\n\npatchwork &lt;- (p1 / p2) | p3\npatchwork & theme_economist()"
+    "text": "Beyond Single Graphs\n\np1 &lt;- ggplot(data=exam_data, \n             aes(x = MATHS)) +\n  geom_histogram(bins=20, \n                 boundary = 100,\n                 color=\"grey25\", \n                 fill=\"grey90\") + \n  coord_cartesian(xlim=c(0,100)) +\n  ggtitle(\"Distribution of Maths scores\")\np1\n\n\n\n\n\n\n\n\n\np2 &lt;- ggplot(data=exam_data, \n             aes(x = ENGLISH)) +\n  geom_histogram(bins=20, \n                 boundary = 100,\n                 color=\"grey25\", \n                 fill=\"grey90\") +\n  coord_cartesian(xlim=c(0,100)) +\n  ggtitle(\"Distribution of English scores\")\np2\n\n\n\n\n\n\n\n\n\np3 &lt;- ggplot(data=exam_data, \n             aes(x= MATHS, \n                 y=ENGLISH)) +\n  geom_point() +\n  geom_smooth(method=lm, \n              size=0.5) +  \n  coord_cartesian(xlim=c(0,100),\n                  ylim=c(0,100)) +\n  ggtitle(\"English scores versus Maths scores for Primary 3\")\np3\n\n\n\n\n\n\n\n\n\nCombining two ggplot2 graphs\n\np1 + p2\n\n\n\n\n\n\n\n\n\n\nCombinig three ggplot2 graphs\n\n(p1 / p2) | p3\n\n\n\n\n\n\n\n\n\n\nCreating figure with insert\n\np3 + inset_element(p2, \n                   left = 0.02, \n                   bottom = 0.7, \n                   right = 0.5, \n                   top = 1)\n\n\n\n\n\n\n\n\n\n\nCreating a composite figure by using patchwork and ggtheme\n\npatchwork &lt;- (p1 / p2) | p3\npatchwork & theme_economist()\n\n\n\n\n\n\n\n\n\npacman::p_load(readxl, gifski, gapminder,\n               plotly, gganimate, tidyverse)"
   },
   {
     "objectID": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html",
@@ -194,5 +194,26 @@
     "title": "About",
     "section": "",
     "text": "About this site\n\n1 + 1\n\n[1] 2"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex02/Hands-on_Ex02.html#importing-the-data",
+    "href": "Hands-on_Ex/Hands-on_Ex02/Hands-on_Ex02.html#importing-the-data",
+    "title": "Hands-on_Ex02",
+    "section": "Importing the data",
+    "text": "Importing the data\n\ncol &lt;- c(\"Country\", \"Continent\")\nglobalPop &lt;- read_xls(\"/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex03/data/GlobalPopulation.xls\",\n                      sheet=\"Data\") %&gt;%\n  mutate_each_(funs(factor(.)), col) %&gt;%\n  mutate(Year = as.integer(Year))\n\n\ncol &lt;- c(\"Country\", \"Continent\")\nglobalPop &lt;- read_xls(\"/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex03/data/GlobalPopulation.xls\",\n                      sheet=\"Data\") %&gt;%\n  mutate_at(col, as.factor) %&gt;%\n  mutate(Year = as.integer(Year))\n\n\ncol &lt;- c(\"Country\", \"Continent\")\nglobalPop &lt;- read_xls(\"/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex03/data/GlobalPopulation.xls\",\n                      sheet=\"Data\") %&gt;%\n  mutate(across(col, as.factor)) %&gt;%\n  mutate(Year = as.integer(Year))"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex02/Hands-on_Ex02.html#animated-data-visualisation-gganimate-methods",
+    "href": "Hands-on_Ex/Hands-on_Ex02/Hands-on_Ex02.html#animated-data-visualisation-gganimate-methods",
+    "title": "Hands-on_Ex02",
+    "section": "Animated Data Visualisation: gganimate methods",
+    "text": "Animated Data Visualisation: gganimate methods\n\nBuilding a static population bubble plot\n\nggplot(globalPop, aes(x = Old, y = Young, \n                      size = Population, \n                      colour = Country)) +\n  geom_point(alpha = 0.7, \n             show.legend = FALSE) +\n  scale_colour_manual(values = country_colors) +\n  scale_size(range = c(2, 12)) +\n  labs(title = 'Year: {frame_time}', \n       x = '% Aged', \n       y = '% Young') \n\n\n\n\n\n\n\n\n\n\nBuilding the animated bubble plot\n\ngg &lt;- ggplot(globalPop, \n       aes(x = Old, \n           y = Young, \n           size = Population, \n           colour = Country)) +\n  geom_point(aes(size = Population,\n                 frame = Year),\n             alpha = 0.7, \n             show.legend = FALSE) +\n  scale_colour_manual(values = country_colors) +\n  scale_size(range = c(2, 12)) +\n  labs(x = '% Aged', \n       y = '% Young')\n\nggplotly(gg)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex02/Hands-on_Ex02.html#animated-data-visualisation-plotly",
+    "href": "Hands-on_Ex/Hands-on_Ex02/Hands-on_Ex02.html#animated-data-visualisation-plotly",
+    "title": "Hands-on_Ex02",
+    "section": "Animated Data Visualisation: plotly",
+    "text": "Animated Data Visualisation: plotly\n\nBuilding an animated bubble plot: ggplotly() method\n\ngg &lt;- ggplot(globalPop, \n       aes(x = Old, \n           y = Young, \n           size = Population, \n           colour = Country)) +\n  geom_point(aes(size = Population,\n                 frame = Year),\n             alpha = 0.7) +\n  scale_colour_manual(values = country_colors) +\n  scale_size(range = c(2, 12)) +\n  labs(x = '% Aged', \n       y = '% Young') + \n  theme(legend.position='none')\n\nggplotly(gg)\n\n\n\n\n\n\n\nBuilding an animated bubble plot: plot_ly() method\n\nbp &lt;- globalPop %&gt;%\n  plot_ly(x = ~Old, \n          y = ~Young, \n          size = ~Population, \n          color = ~Continent,\n          sizes = c(2, 100),\n          frame = ~Year, \n          text = ~Country, \n          hoverinfo = \"text\",\n          type = 'scatter',\n          mode = 'markers'\n          ) %&gt;%\n  layout(showlegend = FALSE)\nbp"
   }
 ]
