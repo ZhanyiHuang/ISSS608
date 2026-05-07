@@ -10,17 +10,19 @@ execute:
   freeze: true
 ---
 
-
 # Visualising Distribution
 
 ## Install packages
+
 ```{r}
 pacman::p_load(ggdist, ggridges, ggthemes,
                colorspace, tidyverse)
 ```
+
 ## Import Data
+
 ```{r}
-exam_data <- read_csv("/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex04/data/Exam_data.csv")
+exam_data <- read_csv("/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex04a/data/Exam_data.csv")
 ```
 
 ```{r}
@@ -32,13 +34,15 @@ exam_data$MATHS <- as.numeric(exam_data$MATHS)
 exam_data$ENGLISH <- as.numeric(exam_data$ENGLISH)
 
 ```
+
 ```{r}
 exam_data$SCIENCE <- as.numeric(exam_data$SCIENCE)
 ```
 
-
 ## Visualising Distribution with Ridgeline Plot
+
 ### Plotting ridgeline graph: ggridges method
+
 ```{r}
 ggplot(exam_data, 
        aes(x = ENGLISH, 
@@ -59,6 +63,7 @@ ggplot(exam_data,
 ```
 
 ### Varying fill colors along the x axis
+
 ```{r}
 ggplot(exam_data, 
        aes(x = ENGLISH, 
@@ -78,6 +83,7 @@ ggplot(exam_data,
 ```
 
 ### Mapping the probabilities directly onto colour
+
 ```{r}
 ggplot(exam_data,
        aes(x = ENGLISH, 
@@ -91,6 +97,7 @@ ggplot(exam_data,
 ```
 
 ### Ridgeline plots with quantile lines
+
 ```{r}
 ggplot(exam_data,
        aes(x = ENGLISH, 
@@ -105,6 +112,7 @@ ggplot(exam_data,
   scale_fill_viridis_d(name = "Quartiles") +
   theme_ridges()
 ```
+
 ```{r}
 ggplot(exam_data,
        aes(x = ENGLISH, 
@@ -125,7 +133,9 @@ ggplot(exam_data,
 ```
 
 ## Visualising Distribution with Raincloud Plot
+
 ### Plotting a Half Eye graph
+
 ```{r}
 ggplot(exam_data, 
        aes(x = RACE, 
@@ -135,7 +145,9 @@ ggplot(exam_data,
                .width = 0,
                point_colour = NA)
 ```
+
 ### Adding the boxplot with geom_boxplot()
+
 ```{r}
 ggplot(exam_data, 
        aes(x = RACE, 
@@ -147,7 +159,9 @@ ggplot(exam_data,
   geom_boxplot(width = .20,
                outlier.shape = NA)
 ```
+
 ### Adding the Dot Plots with stat_dots()
+
 ```{r}
 ggplot(exam_data, 
        aes(x = RACE, 
@@ -165,6 +179,7 @@ ggplot(exam_data,
 ```
 
 ### Finishing touch
+
 ```{r}
 ggplot(exam_data, 
        aes(x = RACE, 
@@ -182,4 +197,3 @@ ggplot(exam_data,
   coord_flip() +
   theme_economist()
 ```
-
