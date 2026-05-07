@@ -197,29 +197,19 @@ library(ungeviz)
 ### Visualising Uncertainty with Hypothetical Outcome Plots (HOPs)
 
 ```{r}
-# Save as object
-p <- ggplot(data = exam, 
-       aes(x = factor(RACE),   # removed the extra bracket here
-           y = MATHS)) +
+ggplot(data = exam, 
+       (aes(x = factor(RACE), 
+            y = MATHS))) +
   geom_point(position = position_jitter(
     height = 0.3, 
     width = 0.05), 
     size = 0.4, 
     color = "#0072B2", 
     alpha = 1/2) +
-  geom_hpline(data = sampler(25, group = RACE), 
+  geom_hpline(data = sampler(25, 
+                             group = RACE), 
               height = 0.6, 
               color = "#D55E00") +
   theme_bw() + 
   transition_states(.draw, 1, 3)
-
-# Render as GIF
-animate(p, renderer = gifski_renderer())
-```
-
-```{r}
-anim_save("maths_by_race.gif")
-
-knitr::include_graphics("/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex04c/maths_by_race.gif")
-
 ```
