@@ -216,11 +216,3 @@ p <- ggplot(data = exam,
 # Render as GIF
 animate(p, renderer = gifski_renderer())
 ```
-
-```{r}
-anim_save("maths_by_race.gif") 
-```
-
-```{r}
-knitr::include_graphics("/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex04c/maths_by_race.gif")
-```
