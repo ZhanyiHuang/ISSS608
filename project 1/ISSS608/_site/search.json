@@ -33,5 +33,33 @@
     "title": "Hands-on_Ex04c",
     "section": "",
     "text": "exam %&gt;%\n  ggplot(aes(x = RACE, \n             y = MATHS)) +\n  stat_pointinterval() +\n  labs(\n    title = \"Visualising confidence intervals of mean math score\",\n    subtitle = \"Mean Point + Multiple-interval plot\")\n\n\n\n\n\n\n\n\n\nexam %&gt;%\n  ggplot(aes(x = RACE, y = MATHS)) +\n  stat_pointinterval(.width = 0.95,\n  .point = median,\n  .interval = qi) +\n  labs(\n    title = \"Visualising confidence intervals of median math score\",\n    subtitle = \"Median Point + Multiple-interval plot\")\n\n\n\n\n\n\n\n\n\n\n\n\nexam %&gt;%\n  ggplot(aes(x = RACE, \n             y = MATHS)) +\n  stat_pointinterval(\n    show.legend = FALSE) +   \n  labs(\n    title = \"Visualising confidence intervals of mean math score\",\n    subtitle = \"Mean Point + Multiple-interval plot\")\n\n\n\n\n\n\n\n\n\n\n\n\nexam %&gt;%\n  ggplot(aes(x = RACE, \n             y = MATHS)) +\n  stat_gradientinterval(   \n    fill = \"skyblue\",      \n    show.legend = TRUE     \n  ) +                        \n  labs(\n    title = \"Visualising confidence intervals of mean math score\",\n    subtitle = \"Gradient + interval plot\")\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n#install.packages(\"devtools\")\ndevtools::install_github(\"wilkelab/ungeviz\")\nlibrary(ungeviz)\n\n\nlibrary(ungeviz)\n\n\n\n\n\n\nggplot(data = exam, \n       (aes(x = factor(RACE), \n            y = MATHS))) +\n  geom_point(position = position_jitter(\n    height = 0.3, \n    width = 0.05), \n    size = 0.4, \n    color = \"#0072B2\", \n    alpha = 1/2) +\n  geom_hpline(data = sampler(25, \n                             group = RACE), \n              height = 0.6, \n              color = \"#D55E00\") +\n  theme_bw() + \n  transition_states(.draw, 1, 3)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05a/Hands-on_Ex05a.html",
+    "href": "Hands-on_Ex/Hands-on_Ex05a/Hands-on_Ex05a.html",
+    "title": "Hands-on_Ex02",
+    "section": "",
+    "text": "pacman::p_load(plotly, ggtern, tidyverse)\n\n\n\n\n\n\n\n\n\n\n#Reading the data into R environment\npop_data &lt;- read_csv(\"/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex05a/data/respopagsex2000to2018_tidy.csv\")\n\n\n\n\n\n#Deriving the young, economy active and old measures\nagpop_mutated &lt;- pop_data %&gt;%\n  mutate(`Year` = as.character(Year))%&gt;%\n  spread(AG, Population) %&gt;%\n  mutate(YOUNG = rowSums(.[4:8]))%&gt;%\n  mutate(ACTIVE = rowSums(.[9:16]))  %&gt;%\n  mutate(OLD = rowSums(.[17:21])) %&gt;%\n  mutate(TOTAL = rowSums(.[22:24])) %&gt;%\n  filter(Year == 2018)%&gt;%\n  filter(TOTAL &gt; 0)\n\n\n\n\n\n\n\n\n#Building the static ternary plot\nggtern(data=agpop_mutated,aes(x=YOUNG,y=ACTIVE, z=OLD)) +\n  geom_point()\n\n\n\n\n\n\n\n\n\n#Building the static ternary plot\nggtern(data=agpop_mutated, aes(x=YOUNG,y=ACTIVE, z=OLD)) +\n  geom_point() +\n  labs(title=\"Population structure, 2015\") +\n  theme_rgbw()\n\n\n\n\n\n\n\n\n\n\n\n\n# reusable function for creating annotation object\nlabel &lt;- function(txt) {\n  list(\n    text = txt, \n    x = 0.1, y = 1,\n    ax = 0, ay = 0,\n    xref = \"paper\", yref = \"paper\", \n    align = \"center\",\n    font = list(family = \"serif\", size = 15, color = \"white\"),\n    bgcolor = \"#b3b3b3\", bordercolor = \"black\", borderwidth = 2\n  )\n}\n\n# reusable function for axis formatting\naxis &lt;- function(txt) {\n  list(\n    title = txt, tickformat = \".0%\", tickfont = list(size = 10)\n  )\n}\n\nternaryAxes &lt;- list(\n  aaxis = axis(\"Young\"), \n  baxis = axis(\"Active\"), \n  caxis = axis(\"Old\")\n)\n\n# Initiating a plotly visualization \nplot_ly(\n  agpop_mutated, \n  a = ~YOUNG, \n  b = ~ACTIVE, \n  c = ~OLD, \n  color = I(\"black\"), \n  type = \"scatterternary\"\n) %&gt;%\n  layout(\n    annotations = label(\"Ternary Markers\"), \n    ternary = ternaryAxes\n  )"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05a/Hands-on_Ex05a.html#installing-and-launching-r-packages",
+    "href": "Hands-on_Ex/Hands-on_Ex05a/Hands-on_Ex05a.html#installing-and-launching-r-packages",
+    "title": "Hands-on_Ex02",
+    "section": "",
+    "text": "pacman::p_load(plotly, ggtern, tidyverse)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05a/Hands-on_Ex05a.html#data-preparation",
+    "href": "Hands-on_Ex/Hands-on_Ex05a/Hands-on_Ex05a.html#data-preparation",
+    "title": "Hands-on_Ex02",
+    "section": "",
+    "text": "#Reading the data into R environment\npop_data &lt;- read_csv(\"/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex05a/data/respopagsex2000to2018_tidy.csv\")\n\n\n\n\n\n#Deriving the young, economy active and old measures\nagpop_mutated &lt;- pop_data %&gt;%\n  mutate(`Year` = as.character(Year))%&gt;%\n  spread(AG, Population) %&gt;%\n  mutate(YOUNG = rowSums(.[4:8]))%&gt;%\n  mutate(ACTIVE = rowSums(.[9:16]))  %&gt;%\n  mutate(OLD = rowSums(.[17:21])) %&gt;%\n  mutate(TOTAL = rowSums(.[22:24])) %&gt;%\n  filter(Year == 2018)%&gt;%\n  filter(TOTAL &gt; 0)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex05a/Hands-on_Ex05a.html#plotting-ternary-diagram-with-r",
+    "href": "Hands-on_Ex/Hands-on_Ex05a/Hands-on_Ex05a.html#plotting-ternary-diagram-with-r",
+    "title": "Hands-on_Ex02",
+    "section": "",
+    "text": "#Building the static ternary plot\nggtern(data=agpop_mutated,aes(x=YOUNG,y=ACTIVE, z=OLD)) +\n  geom_point()\n\n\n\n\n\n\n\n\n\n#Building the static ternary plot\nggtern(data=agpop_mutated, aes(x=YOUNG,y=ACTIVE, z=OLD)) +\n  geom_point() +\n  labs(title=\"Population structure, 2015\") +\n  theme_rgbw()\n\n\n\n\n\n\n\n\n\n\n\n\n# reusable function for creating annotation object\nlabel &lt;- function(txt) {\n  list(\n    text = txt, \n    x = 0.1, y = 1,\n    ax = 0, ay = 0,\n    xref = \"paper\", yref = \"paper\", \n    align = \"center\",\n    font = list(family = \"serif\", size = 15, color = \"white\"),\n    bgcolor = \"#b3b3b3\", bordercolor = \"black\", borderwidth = 2\n  )\n}\n\n# reusable function for axis formatting\naxis &lt;- function(txt) {\n  list(\n    title = txt, tickformat = \".0%\", tickfont = list(size = 10)\n  )\n}\n\nternaryAxes &lt;- list(\n  aaxis = axis(\"Young\"), \n  baxis = axis(\"Active\"), \n  caxis = axis(\"Old\")\n)\n\n# Initiating a plotly visualization \nplot_ly(\n  agpop_mutated, \n  a = ~YOUNG, \n  b = ~ACTIVE, \n  c = ~OLD, \n  color = I(\"black\"), \n  type = \"scatterternary\"\n) %&gt;%\n  layout(\n    annotations = label(\"Ternary Markers\"), \n    ternary = ternaryAxes\n  )"
   }
 ]
