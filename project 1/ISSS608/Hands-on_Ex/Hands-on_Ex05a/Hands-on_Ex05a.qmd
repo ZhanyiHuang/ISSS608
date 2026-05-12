@@ -1,5 +1,5 @@
 ---
-title: "Hands-on_Ex02"
+title: "Hands-on_Ex05a"
 author: "Huang Zhanyi"
 date: "May 12, 2026"
 date-modified: "last-modified"
@@ -9,7 +9,6 @@ execute:
   warning: false
   freeze: true
 ---
-
 
 # Creating Ternary Plot with R
 
@@ -108,4 +107,3 @@ plot_ly(
     ternary = ternaryAxes
   )
 ```
-
