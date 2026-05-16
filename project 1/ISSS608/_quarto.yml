@@ -30,6 +30,13 @@ website:
             href: "Hands-on_Ex/Hands-on_Ex05d/Hands-on_Ex05d.html"
           - text: "Hands-on Exercise 5e"
             href: "Hands-on_Ex/Hands-on_Ex05e/Hands-on_Ex05e.html"
+      - text: "Take-Home Exercise"
+        menu:
+          - text: "Take-Home Exercise 1 (Technical Report)"
+            herf: "Take-Home_Ex/Take-Home_Ex01_T/1_technical_report.html"
+          - text: "Take-Home Exercise 1 (Executive Summary)"
+            herf: "Take-Home_Ex/Take-Home_Ex01_E/1_executive_summary.html"
+        
             
     right:
       - href: index.qmd
