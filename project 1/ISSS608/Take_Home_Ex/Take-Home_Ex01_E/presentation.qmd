@@ -1,0 +1,585 @@
+---
+title: "Visual Analytics for Motor Insurance Portfolio"
+subtitle: "Profitability and Volatility Investigation"
+author: "Huang Zhanyi"
+date: "May 16, 2026"
+format:
+  revealjs:
+    theme: simple
+    slide-number: true
+    transition: slide
+    chalkboard: false
+    footer: "ISSS608 Visual Analytics | Take-Home Exercise 1"
+    css: styles.css
+execute:
+  warning: false
+  message: false
+  echo: false
+  freeze: true
+---
+
+```{r}
+#| label: setup-pres
+pacman::p_load(tidyverse,
+               ggrepel, ggthemes, hrbrthemes, patchwork,
+               ggridges, ggdist, ggstatsplot, colorspace,
+               knitr, scales)
+set.seed(1234)
+
+policy_raw <- read_delim(
+  "data/Dataset of motor insurance portfolio.csv",
+  delim          = ";",
+  locale         = locale(decimal_mark = "."),
+  show_col_types = FALSE
+)
+
+policy <- policy_raw %>%
+  select(insured_id, year, policy_type, policy_status,
+         business_type, payment_frequency, bonus_score,
+         driver_age, vehicle_age, age_driving_licence,
+         fuel_type, vehicle_value, vehicle_brand,
+         municipality_type, circulation_area,
+         total_premium, total_incurred,
+         total_claims, total_exposure) %>%
+  mutate(
+    year = as.integer(year),
+    policy_type = factor(policy_type,
+                         levels = c("TP","TPG","CC","COMP_E","COMP_N")),
+    policy_status = factor(policy_status,
+                           levels = c("A","C"),
+                           labels = c("Active","Cancelled")),
+    business_type = factor(business_type,
+                           levels = c("NB","P"),
+                           labels = c("New Business","Portfolio")),
+    payment_frequency = factor(payment_frequency,
+                               levels = c("A","S","Q"),
+                               labels = c("Annual","Semi-annual","Quarterly")),
+    bonus_score = factor(bonus_score,
+                         levels = c("G","N","B"),
+                         labels = c("Good","Neutral","Bad")),
+    fuel_type = factor(fuel_type,
+                       levels = c("D","G"),
+                       labels = c("Diesel","Gasoline")),
+    municipality_type = factor(municipality_type,
+                               levels = c("I","C","IS"),
+                               labels = c("Inland","Coastal","Islands")),
+    circulation_area = factor(circulation_area,
+                              levels = c("U","R"),
+                              labels = c("Urban","Rural")),
+    vehicle_brand = if_else(
+      vehicle_brand %in% (count(., vehicle_brand, sort = TRUE) %>%
+                          slice_head(n = 10) %>% pull(vehicle_brand)),
+      vehicle_brand, "Other"),
+    vehicle_brand    = factor(vehicle_brand),
+    loss_ratio       = total_incurred / total_premium,
+    claim_frequency  = total_claims   / total_exposure,
+    severity         = total_incurred / total_claims,
+    has_claim        = total_claims   > 0,
+    loss_ratio_bins  = cut(loss_ratio,
+                           breaks = c(-Inf, 0, 0.5, 1, Inf),
+                           labels = c("Zero","0-0.5","0.5-1","Above 1")),
+    driver_age_band  = cut(driver_age,
+                           breaks = c(17,25,35,45,55,65,Inf),
+                           labels = c("18-25","26-35","36-45",
+                                      "46-55","56-65","65+")),
+    vehicle_age_band = cut(vehicle_age,
+                           breaks = c(-1,5,10,15,20,Inf),
+                           labels = c("0-5","6-10","11-15",
+                                      "16-20","20+"))
+  )
+```
+
+## Contents {.smaller}
+
+::: incremental
+1.  Study Overview
+2.  Portfolio Composition
+3.  Key Numerical Variables
+4.  The Headline Metric — Loss Ratio
+5.  Policy Type: The Primary Profitability Driver
+6.  Policy Type: Claim Rate Mechanism
+7.  Policy Type: Loss Distribution (Ridgeline)
+8.  Bonus Score: Tail Risk Predictor
+9.  Confidence Intervals: Uncertainty by Segment
+10. COMP_N Deterioration Trend
+11. Driver Age and Claim Frequency
+12. Negative Findings
+13. Summary and Recommendations
+:::
+
+::: notes
+This presentation investigates the profitability and volatility of a Spanish motor insurance portfolio using visual analytics. The dataset contains 354,140 policy-year records from 2022 to 2024. Loss ratio (total incurred divided by total premium) is the core profitability metric — below 1 means the insurer is profitable, above 1 means loss-making. The analysis proceeds from univariate exploration to bivariate hypothesis testing, using ggplot2 and its extensions throughout. Six key findings emerged, with COMP_N identified as the most urgent pricing concern.
+:::
+
+------------------------------------------------------------------------
+
+## 1. Study Overview
+
+::::: columns
+::: {.column width="50%"}
+**Dataset**
+
+- 354,140 policy-year records
+- Spanish non-life motor insurer
+- 2022 to 2024
+
+**Core Metric**
+
+$$\text{Loss Ratio} = \frac{\text{Total Incurred}}{\text{Total Premium}}$$
+
+- LR \< 1 → Profitable
+- LR = 1 → Break-even
+- LR \> 1 → Loss-making
+:::
+
+::: {.column width="50%"}
+**Research Questions**
+
+1.  What is the overall profitability of the portfolio?
+2.  Which factors drive loss ratio differences?
+3.  Which segments are most volatile and hardest to price?
+
+**Methods**
+
+- Univariate: histograms, boxplots, density plots
+- Bivariate: ggbetweenstats, ggbarstats, ridgeline plots, scatter regression
+- Statistical: Kruskal-Wallis, Spearman correlation, chi-squared
+:::
+:::::
+
+::: notes
+The study uses a real-world open-access dataset from a Spanish non-life insurer available on Mendeley Data. The loss ratio is the central measure — it captures how much of every euro collected in premiums is paid back out in claims. A portfolio-level loss ratio below 1 indicates overall profitability. All visual analytics are implemented in R using ggplot2 and its extensions, following the principle of pairing each visual finding with a formal statistical test for validation.
+:::
+
+------------------------------------------------------------------------
+
+## 2. Portfolio Composition
+
+```{r}
+#| fig-height: 5
+
+bar_label <- function(df, var, title) {
+  ggplot(df, aes(x = fct_rev({{ var }}))) +
+    geom_bar(fill = "#6BAED6") +
+    geom_text(stat = "count",
+              aes(label = paste0(after_stat(count), ",  ",
+                                 round(after_stat(count) /
+                                       sum(after_stat(count)) * 100, 1), "%")),
+              hjust = -0.1, size = 2.8) +
+    coord_flip() +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.3))) +
+    labs(title = title, x = NULL, y = NULL) +
+    theme_minimal(base_size = 11) +
+    theme(axis.text.x  = element_blank(),
+          axis.ticks.x = element_blank(),
+          panel.grid   = element_blank())
+}
+
+p1 <- bar_label(policy, policy_type,      "Policy Type")
+p2 <- bar_label(policy, bonus_score,      "Bonus Score")
+p3 <- bar_label(policy, municipality_type,"Municipality")
+p4 <- bar_label(policy %>% filter(!is.na(fuel_type)), fuel_type, "Fuel Type")
+
+(p1 | p2) / (p3 | p4) +
+  plot_annotation(
+    title    = "Portfolio Composition Across Key Categorical Variables",
+    subtitle = "Count and percentage of policies",
+    tag_levels = "A"
+  )
+```
+
+::: notes
+CC dominates at 57.8% of all policies. Over 96% of customers are rated Good on bonus score — the portfolio is heavily skewed toward low-risk customers. Inland is the largest geographic segment. Diesel is the dominant fuel type. Two important caveats: TP has only 5,757 policies and Islands has 24,140 — statistical tests involving these groups should be treated cautiously due to small sample sizes. The Good bonus score dominance also means Neutral and Bad groups are very small, which affects the power of bonus score analyses.
+:::
+
+------------------------------------------------------------------------
+
+## 3. Key Numerical Variables
+
+```{r}
+#| fig-height: 5
+
+hist_box <- function(df, var, var_label) {
+  v     <- df %>% filter(!is.na({{ var }})) %>% pull({{ var }})
+  m_mn  <- round(mean(v), 1)
+  m_med <- round(median(v), 1)
+
+  hist_p <- ggplot(df %>% filter(!is.na({{ var }})), aes(x = {{ var }})) +
+    geom_histogram(bins = 25, fill = "#6BAED6", colour = "#f5f5f5") +
+    geom_vline(xintercept = m_med, colour = "#595DE5", linewidth = 0.7, linetype = "dashed") +
+    geom_vline(xintercept = m_mn,  colour = "#e0218a", linewidth = 0.7, linetype = "dashed") +
+    annotate("text", x = m_med, y = Inf, label = paste0("Median=", m_med),
+             colour = "#595DE5", hjust = -0.05, vjust = 1.5, size = 2.5) +
+    annotate("text", x = m_mn,  y = Inf, label = paste0("Mean=", m_mn),
+             colour = "#e0218a", hjust = -0.05, vjust = 3.2, size = 2.5) +
+    labs(x = var_label, y = NULL) +
+    theme_minimal(base_size = 10) +
+    theme(axis.text.y = element_blank(), panel.grid = element_blank())
+
+  box_p <- ggplot(df %>% filter(!is.na({{ var }})), aes(y = {{ var }}, x = "")) +
+    geom_boxplot(fill = "#6BAED6", outlier.colour = "#d18a7d",
+                 outlier.shape = 16, outlier.size = 0.6) +
+    stat_summary(geom = "point", fun = "mean", colour = "#e0218a", size = 2.5) +
+    stat_boxplot(geom = "errorbar", width = 0.5) +
+    coord_flip() +
+    theme_minimal(base_size = 10) +
+    theme(axis.text = element_blank(), axis.ticks = element_blank(),
+          panel.grid = element_blank())
+
+  (box_p / hist_p) + plot_layout(heights = c(1, 3.5))
+}
+
+p_a <- hist_box(policy, driver_age,    "Driver Age (years)")
+p_b <- hist_box(policy, vehicle_age,   "Vehicle Age (years)")
+p_c <- hist_box(policy, total_premium, "Total Premium (EUR)")
+p_d <- hist_box(policy %>% filter(!is.na(vehicle_value)), vehicle_value, "Vehicle Value (EUR)")
+
+(p_a | p_b) / (p_c | p_d) +
+  plot_annotation(
+    title    = "Distributions of Key Numerical Variables",
+    subtitle = "Boxplot on top, histogram below. Pink = mean, purple = median.",
+    tag_levels = "A"
+  )
+```
+
+::: notes
+Four key patterns emerge. Driver age is symmetric around 48 years — this is a middle-aged portfolio with few young or elderly drivers. Vehicle age has a median of 25 years — remarkably old, suggesting vehicles well past warranty with higher maintenance risks. Total premium is right-skewed with a median of EUR 258 — two visible clusters suggest different cover levels. Vehicle value is extremely right-skewed with a median of EUR 24,730 but outliers up to EUR 400,000. These high-value vehicles pose outsized individual risk — one claim on a EUR 400,000 car can generate a loss ratio far exceeding the annual premium.
+:::
+
+------------------------------------------------------------------------
+
+## 4. The Headline Metric — Loss Ratio
+
+```{r}
+#| fig-height: 4.5
+
+pct_excluded <- scales::percent(
+  1 - mean(policy$total_claims > 0 & policy$total_incurred > 0, na.rm = TRUE),
+  accuracy = 0.1)
+
+claims_only <- policy %>%
+  filter(total_claims > 0, total_incurred > 0,
+         is.finite(loss_ratio), loss_ratio < 5)
+
+max_y <- claims_only %>%
+  pull(loss_ratio) %>%
+  cut(breaks = seq(0, 5, length.out = 41)) %>%
+  table() %>% max()
+
+ggplot(claims_only, aes(x = loss_ratio)) +
+  geom_histogram(bins = 40, fill = "#6BAED6", colour = "#f5f5f5") +
+  geom_vline(xintercept = 1, colour = "firebrick",
+             linetype = "dashed", linewidth = 0.8) +
+  annotate("text", x = 1.08, y = max_y * 0.6,
+           label = "Break-even\n(LR = 1)",
+           colour = "firebrick", hjust = 0, size = 3.5) +
+  annotate("text", x = 3, y = max_y * 0.9,
+           label = paste0(pct_excluded, " of policies\nexcluded\n(no paid claims)"),
+           colour = "#2171B5", hjust = 0, size = 3.5) +
+  labs(title = "Among Policies With Paid Claims, Many Exceed Break-Even",
+       subtitle = paste0("Showing ", scales::comma(nrow(claims_only)),
+                         " policies with at least one paid claim (",
+                         pct_excluded, " excluded)"),
+       x = "Loss Ratio  (incurred / premium)",
+       y = "Number of Policies With a Claim") +
+  theme_minimal(base_size = 12)
+```
+
+::: notes
+88.1% of policies make no claims at all — these are the silent majority that fund the portfolio's profitability. Among the 32,637 policies that did claim, more sit below break-even than above it — meaning most claimants are still profitable. However the critical insight is the shape: instead of dropping sharply after LR = 1, the distribution declines gradually all the way to LR = 5. This persistent flat tail means catastrophically loss-making policies are common, not rare. A small number of extreme claims drive the portfolio's volatility risk disproportionately.
+:::
+
+------------------------------------------------------------------------
+
+## 5. Policy Type: The Primary Driver
+
+```{r}
+#| fig-height: 4.5
+
+policy %>%
+  filter(is.finite(loss_ratio), loss_ratio < 5) %>%
+  ggplot(aes(x = policy_type, y = loss_ratio)) +
+  geom_boxplot(fill = "#6BAED6", outlier.shape = NA) +
+  stat_summary(geom = "point", fun = "mean",
+               colour = "#e0218a", size = 3) +
+  geom_hline(yintercept = 1, colour = "firebrick",
+             linetype = "dashed", linewidth = 0.7) +
+  annotate("text", x = 1, y = 1.05,
+           label = "Break-even", colour = "firebrick", size = 3.5) +
+  coord_cartesian(ylim = c(0, 2)) +
+  labs(title = "COMP_N Has the Highest Mean Loss Ratio Across All Policy Types",
+       subtitle = "Boxplot zoomed to 0–2. Pink point = mean. Dashed = break-even.",
+       x = "Policy Type", y = "Loss Ratio (zoomed to 0–2)") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank())
+```
+
+::: notes
+All five policy types are profitable on average — every mean (pink point) sits well below the break-even line of 1. A clear gradient emerges: TP and TPG means are closest to zero, while COMP_N's mean at approximately 0.5 is the highest of all types. Critically, COMP_N is the only segment with a visible IQR box, meaning its loss ratios genuinely spread across a wider range than other types. The Kruskal-Wallis test confirms these differences are statistically significant (p = 2.23e-308). Every policy type is significantly different from every other in pairwise FDR-corrected comparisons.
+:::
+
+------------------------------------------------------------------------
+
+## 6. Policy Type: Claim Rate Mechanism
+
+```{r}
+#| fig-height: 4.5
+
+policy %>%
+  group_by(policy_type) %>%
+  summarise(claim_rate = mean(has_claim) * 100, n = n()) %>%
+  ggplot(aes(x = policy_type, y = claim_rate)) +
+  geom_col(fill = "#6BAED6", width = 0.6) +
+  geom_text(aes(label = paste0(round(claim_rate, 1), "%",
+                               "\n(n=", scales::comma(n), ")")),
+            vjust = -0.3, size = 4) +
+  scale_y_continuous(limits = c(0, 45), labels = NULL) +
+  labs(title = "COMP_N Policies Claim Most Frequently — Over 3x the TP Rate",
+       subtitle = "Percentage of policies with at least one claim by policy type",
+       x = "Policy Type", y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(axis.ticks.y = element_blank(), panel.grid = element_blank())
+```
+
+::: notes
+The claim rate chart explains the mechanism behind the loss ratio differences. Claim rate rises steadily as cover broadens — TP at 6.9% through to COMP_N at 31.3%. The most revealing comparison is COMP_E versus COMP_N: both products offer the same breadth of cover, but COMP_N has no excess while COMP_E requires the customer to pay the first portion of any claim. This single design feature — the removal of the excess — nearly doubles the claim rate from 18.5% to 31.3%. When customers face no financial penalty for filing a claim, they claim freely even for minor damages.
+:::
+
+------------------------------------------------------------------------
+
+## 7. Loss Distribution by Policy Type
+
+```{r}
+#| fig-height: 4.8
+
+policy %>%
+  filter(is.finite(loss_ratio), loss_ratio < 5) %>%
+  ggplot(aes(x = loss_ratio,
+             y = fct_rev(policy_type),
+             fill = 0.5 - abs(0.5 - after_stat(ecdf)))) +
+  stat_density_ridges(geom = "density_ridges_gradient",
+                      calc_ecdf = TRUE, alpha = 0.8, scale = 1.5) +
+  scale_fill_viridis_c(name = "Probability", option = "C") +
+  geom_vline(xintercept = 1, colour = "firebrick",
+             linetype = "dashed", linewidth = 0.7) +
+  coord_cartesian(xlim = c(0, 1)) +
+  labs(title = "TP and TPG Are Most Predictable — COMP_N Most Volatile",
+       subtitle = "ECDF gradient: brighter colour = most probable values. All policies included. Dashed = break-even.",
+       x = "Loss Ratio", y = NULL) +
+  theme_ridges(font_size = 12) +
+  theme(plot.background = element_rect(fill = "white", colour = "white"))
+```
+
+::: notes
+The ECDF gradient ridgeline adds a dimension beyond the boxplot — it shows not just where values sit but how probable each value is. Brighter yellow means more policies cluster at that loss ratio. TP and TPG show the tallest, most concentrated bright peaks near zero, meaning their outcomes are highly predictable and cluster tightly in the profitable region. COMP_N has the flattest and least intensely coloured ridge — its probability is spread across a wider range, meaning any given COMP_N policy could have almost any loss ratio. This is the visual definition of volatility — not that losses are always high, but that they are unpredictable.
+:::
+
+------------------------------------------------------------------------
+
+## 8. Bonus Score: Tail Risk Predictor
+
+```{r}
+#| fig-height: 4.8
+
+policy %>%
+  filter(is.finite(loss_ratio), loss_ratio < 5) %>%
+  ggplot(aes(x = loss_ratio,
+             y = fct_rev(bonus_score),
+             fill = factor(after_stat(quantile)))) +
+  stat_density_ridges(geom = "density_ridges_gradient",
+                      calc_ecdf = TRUE,
+                      quantiles = c(0.5, 0.75, 0.90),
+                      quantile_lines = TRUE) +
+  scale_fill_viridis_d(name = "Quantiles", alpha = 0.8) +
+  geom_vline(xintercept = 1, colour = "firebrick",
+             linetype = "dashed", linewidth = 0.7) +
+  coord_cartesian(xlim = c(0, 2)) +
+  labs(title = "Bad Bonus Score Pushes the Loss Tail Beyond Break-Even",
+       subtitle = "All policies. Lines = 50th, 75th, 90th percentiles. Dashed = break-even.",
+       x = "Loss Ratio", y = NULL) +
+  theme_ridges(font_size = 12) +
+  theme(plot.background = element_rect(fill = "white", colour = "white"))
+```
+
+::: notes
+The quantile ridgeline chart reveals how bonus score differentiates tail risk rather than typical behaviour. For Good customers, the 90th percentile line falls well below break-even at around 0.3 — meaning 90% of Good policies have a loss ratio below 0.3. For Bad customers, the 90th percentile crosses break-even at LR = 1, meaning the worst 10% of Bad customers are loss-making. The chi-squared association test confirms this is statistically significant (p = 1.35e-94). Bad customers are 44% more likely to generate a loss-making outcome (13% vs 9%). Bonus score is a validated, actionable pricing signal.
+:::
+
+------------------------------------------------------------------------
+
+## 9. Confidence Intervals by Segment
+
+```{r}
+#| fig-height: 4.5
+
+my_sum <- policy %>%
+  filter(is.finite(loss_ratio), loss_ratio < 5) %>%
+  group_by(policy_type) %>%
+  summarise(n    = n(),
+            mean = mean(loss_ratio, na.rm = TRUE),
+            sd   = sd(loss_ratio,   na.rm = TRUE)) %>%
+  mutate(se = sd / sqrt(n - 1))
+
+ggplot(my_sum) +
+  geom_errorbar(aes(x = policy_type,
+                    ymin = mean - 2.58 * se,
+                    ymax = mean + 2.58 * se),
+                width = 0.2, colour = "grey40", linewidth = 0.8) +
+  geom_point(aes(x = policy_type, y = mean),
+             colour = "#e0218a", size = 4) +
+  geom_hline(yintercept = 1, colour = "firebrick",
+             linetype = "dashed", linewidth = 0.7) +
+  annotate("text", x = 0.6, y = 1.05,
+           label = "Break-even", colour = "firebrick", size = 3.5) +
+  labs(title = "99% Confidence Intervals — COMP_N Has the Widest Interval",
+       subtitle = "Mean loss ratio ± 2.58 SE (99% CI). Pink point = mean.",
+       x = "Policy Type", y = "Mean Loss Ratio") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank())
+```
+
+::: notes
+The 99% confidence interval chart quantifies pricing uncertainty. TP, TPG and CC have extremely tight intervals — their mean loss ratios are highly stable and predictable, making them easy to price accurately. COMP_E sits higher at around 0.25 with a slightly wider interval. COMP_N has both the highest mean (approximately 0.47) and the widest interval of all five segments. The wide interval reflects high standard deviation — COMP_N outcomes vary enormously from policy to policy. This combination of high average and high uncertainty makes COMP_N the most difficult and risky segment to price.
+:::
+
+------------------------------------------------------------------------
+
+## 10. COMP_N Deterioration Trend
+
+```{r}
+#| fig-height: 4.5
+
+policy %>%
+  filter(is.finite(loss_ratio), loss_ratio < 5) %>%
+  group_by(year, policy_type) %>%
+  summarise(mean_lr = mean(loss_ratio, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = year, y = mean_lr,
+             colour = policy_type, group = policy_type)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_text(aes(label = round(mean_lr, 2)),
+            vjust = -0.8, size = 3) +
+  geom_hline(yintercept = 1, colour = "firebrick",
+             linetype = "dashed", linewidth = 0.7) +
+  scale_x_continuous(breaks = unique(policy$year)) +
+  scale_colour_brewer(palette = "Set1") +
+  labs(title = "COMP_N Is Deteriorating Rapidly — Heading Toward Break-Even",
+       subtitle = "Mean loss ratio per year by policy type. Dashed = break-even.",
+       x = "Year", y = "Mean Loss Ratio", colour = "Policy Type") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank())
+```
+
+::: notes
+The temporal trend chart confirms the COMP_N finding is structural rather than a one-year anomaly. TP, TPG and CC remain flat and stable across all three years — these segments are reliably priced. COMP_E shows a gradual upward trend from 0.19 to 0.26. COMP_N is deeply concerning: it rose sharply from 0.30 in 2022 to 0.40 in 2023 and further to 0.61 in 2024. At this rate of deterioration, COMP_N will breach break-even within one to two years. This is the most urgent actionable finding of the entire analysis — COMP_N premiums must be repriced upward immediately.
+:::
+
+------------------------------------------------------------------------
+
+## 11. Driver Age and Claim Frequency
+
+```{r}
+#| fig-height: 4.5
+
+overall_mean_freq <- mean(policy$claim_frequency[is.finite(policy$claim_frequency)],
+                          na.rm = TRUE)
+cap <- quantile(policy$claim_frequency[is.finite(policy$claim_frequency)],
+                0.95, na.rm = TRUE)
+
+policy %>%
+  filter(!is.na(driver_age_band),
+         is.finite(claim_frequency),
+         claim_frequency < cap) %>%
+  ggplot(aes(x = claim_frequency, y = driver_age_band,
+             colour = driver_age_band)) +
+  geom_jitter(size = 0.5, alpha = 0.08, height = 0.3, width = 0.05) +
+  stat_summary(fun = "median", geom = "point",
+               colour = "#595DE5", size = 4, alpha = 0.9) +
+  geom_vline(xintercept = overall_mean_freq,
+             colour = "firebrick", linetype = "dashed", linewidth = 0.7) +
+  annotate("text", x = overall_mean_freq + 0.02, y = 6.4,
+           label = paste0("Portfolio mean = ", round(overall_mean_freq, 3)),
+           colour = "firebrick", size = 3, hjust = 0) +
+  scale_colour_brewer(palette = "Blues") +
+  labs(title = "Claim Frequency by Driver Age Group — Statistically Significant Differences",
+       subtitle = "Each dot = one policy. Blue point = median. Dashed = portfolio mean. Kruskal-Wallis p = 3.67e-43.",
+       x = "Claim Frequency (claims per year)", y = "Driver Age Group") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none", panel.grid.minor = element_blank())
+```
+
+::: notes
+The jitter plot shows two distinct clusters for every age group — a zero-claim cluster on the left and a claimant cluster starting at exactly 1.0 on the right. All group medians sit at zero, confirming the majority of policies in every age group make no claims. Among those that do claim, older groups (46 and above) show slightly denser dot bands. The Kruskal-Wallis test confirms claim frequency differences across age groups are statistically significant (p = 3.67e-43). The Spearman correlation between driver age and claim frequency is negative and significant. The 18-25 group has only 1,616 policies — results for this group are directionally informative but should be treated cautiously.
+:::
+
+------------------------------------------------------------------------
+
+## 12. Negative Findings
+
+::::: columns
+::: {.column width="50%"}
+**Vehicle Age vs Loss Ratio**
+
+```{r}
+#| fig-height: 3.5
+
+policy %>%
+  filter(is.finite(loss_ratio), loss_ratio < 5) %>%
+  slice_sample(n = 5000) %>%
+  ggplot(aes(x = vehicle_age, y = loss_ratio)) +
+  geom_point(alpha = 0.15, size = 0.6, colour = "#6BAED6") +
+  geom_smooth(method = lm, linewidth = 1,
+              colour = "#e0218a", se = TRUE) +
+  geom_hline(yintercept = 1, colour = "firebrick",
+             linetype = "dashed", linewidth = 0.6) +
+  labs(title = "Vehicle Age — No Strong Effect",
+       x = "Vehicle Age (years)", y = "Loss Ratio") +
+  theme_minimal(base_size = 10) +
+  theme(panel.grid.minor = element_blank())
+```
+:::
+
+::: {.column width="50%"}
+**Geography — Municipality Type**
+
+```{r}
+#| fig-height: 3.5
+
+policy %>%
+  filter(total_claims > 0, total_incurred > 0,
+         is.finite(loss_ratio), loss_ratio < 5) %>%
+  ggplot(aes(x = loss_ratio)) +
+  geom_histogram(bins = 20, fill = "#6BAED6", colour = "#f5f5f5") +
+  geom_vline(xintercept = 1, colour = "firebrick",
+             linetype = "dashed", linewidth = 0.6) +
+  facet_wrap(~ municipality_type) +
+  labs(title = "Geography — Identical Shape Across Regions",
+       x = "Loss Ratio", y = "Count") +
+  theme_minimal(base_size = 10) +
+  theme(panel.grid.minor = element_blank())
+```
+:::
+:::::
+
+::: notes
+Two variables that might intuitively seem important turn out to have no meaningful effect on loss ratio. Vehicle age shows a nearly flat regression line — knowing how old a vehicle is tells you almost nothing about its loss ratio. Geography (municipality type) shows identical right-skewed loss ratio shapes across Inland, Coastal and Islands panels — the loss ratio distribution pattern does not change with location. These negative findings are as important as positive ones: they tell the underwriter where NOT to spend analytical effort, and confirm that policy type and bonus score are the primary and most actionable pricing levers.
+:::
+
+------------------------------------------------------------------------
+
+## 13. Summary and Recommendations
+
+::: smaller
+| Finding | Evidence | Action |
+|----|----|----|
+| Portfolio is profitable overall | 88% zero-claim policies; mean LR well below 1 | Maintain current strategy |
+| **COMP_N loss ratio deteriorating** | Rose from 0.30 to 0.61 in 3 years; claim rate 31.3% | **Urgent repricing required** |
+| COMP_N most volatile segment | Widest IQR, widest 99% CI, flattest ridgeline | Add volatility loading to COMP_N premium |
+| Bad bonus score predicts tail risk | 90th pct crosses break-even; p = 1.35e-94 | Use bonus score aggressively in pricing tiers |
+| Older drivers claim more | Kruskal-Wallis p = 3.67e-43 | Apply age-based pricing differentiation |
+| Vehicle age and geography: weak drivers | Flat regression; identical facet shapes | Deprioritise in pricing models |
+:::
+
+::: notes
+Six findings emerged from this analysis. The most urgent is COMP_N — its mean loss ratio has doubled in three years and will breach break-even within one to two years if the trend continues. The second priority is integrating bonus score more aggressively into pricing, as it is a statistically validated predictor of tail risk even if its average effect is modest. Age-based pricing is also supported by the data. Vehicle age and geography can be deprioritised as pricing variables. The portfolio as a whole remains profitable, but the COMP_N deterioration represents a structural risk that requires immediate underwriting intervention.
+:::
