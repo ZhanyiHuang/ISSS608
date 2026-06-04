@@ -1,0 +1,1140 @@
+---
+title: "MC1: The HarborCrest Breach — Visual Analytics of TenantThread's Embargo Failure"
+subtitle: "IS428 Visual Analytics for Business Intelligence — Mini-Challenge 1"
+author: "Student Submission"
+date: "2026-05-29"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    code-fold: true
+    code-tools: true
+    code-summary: "Show Code"
+    theme: cosmo
+    highlight-style: github
+    page-layout: full
+    embed-resources: true
+    smooth-scroll: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 10, fig.height = 6)
+```
+
+# 1. Overview
+
+## 1.1 Background
+
+TenantThread is a property technology company whose flagship "Retention Optimizer" product scored tenants on payment behaviour, maintenance requests, and message sentiment — then flagged residents as "high-friction." A local newspaper, the *SaltWind Journal*, had been running an exposé under the hashtag **#AlgorithmicEviction**.
+
+Simultaneously, TenantThread was negotiating a merger with **CivicLoom Realty Partners**, codenamed **Project HarborCrest**. The merger announcement was under a strict information embargo until **6:00 PM on June 5th, 2046**. An automated compliance agent — referred to as **"The Judge"** — was installed to prevent leaks.
+
+Despite these safeguards, embargoed merger information appeared on the social media platform *FleX* by accounts associated with TenantThread around 5:00 PM — one hour before the official embargo lifted. **CivicLoom's legal team must now determine: was this a deliberate leak or a system breakdown under crisis pressure?**
+
+## 1.2 Dataset
+
+The dataset `MC1_final_00.json` contains 23 simulated rounds spanning **May 17–June 5, 2046**, covering 912 messages across 7 AI agents, 6 communication channels, and 5 types of message actions.
+
+| Dimension | Detail |
+|-----------|--------|
+| **Time period** | May 17, 2046 – June 5, 2046 (23 rounds) |
+| **Total messages** | 912 |
+| **Agents** | 7 (Legal, Platform-Trust, PR, Social-Manager, PR-Intern, Intern, Judge) |
+| **Channels** | comms_huddle, one_on_one_chat, side_huddle, official_post, personal_post, anonymous_post |
+| **Key event** | Embargo breach ~5:00 PM on June 5, 2046 |
+
+## 1.3 R Packages Used
+
+```{r packages}
+pacman::p_load(
+  # Core data wrangling
+  tidyverse, jsonlite, lubridate,
+  # jsonlite provides read_json() which returns native R lists — safer than
+  # fromJSON(flatten=TRUE) which coerces rounds into a data frame.
+
+  # Visualisation
+  ggplot2, ggrepel, patchwork, ggthemes, hrbrthemes,
+
+  # Interactive plots
+  plotly, ggiraph, DT,
+
+  # Network / relational
+  igraph, ggraph, tidygraph,
+
+  # Distribution plots
+  ggridges, ggdist,
+
+  # Color utilities
+  colorspace, RColorBrewer, viridis
+)
+```
+
+---
+
+# 2. Data Import and Wrangling
+
+## 2.1 Loading the JSON Data
+
+The dataset is a deeply nested JSON structure with `rounds` as the top-level array. Each round contains `environment_context`, `communications`, and `participants` sub-objects.
+
+::: {.callout-note}
+**Parsing note:** `jsonlite::fromJSON()` with its default `flatten = TRUE` coerces `rounds` into a data frame, making `rounds[[1]]` return the first *column* rather than the first *round*. We instead use `jsonlite::read_json()` which always returns native R lists, preserving the nested structure and allowing safe `[[i]]$field` access.
+:::
+
+```{r load-data}
+# read_json() always returns a native R list (no coercion to data.frame)
+raw_data    <- read_json("data/MC1_final_00.json")
+rounds_list <- raw_data$rounds          # a list of 23 named lists
+
+cat("Number of rounds:", length(rounds_list), "\n")
+cat("Round date range:", rounds_list[[1]]$hour, "to",
+    rounds_list[[length(rounds_list)]]$hour, "\n")
+```
+
+## 2.2 Parsing Communications into a Flat Table
+
+With `read_json()`, each round's `communications` is a **list of named lists** (one per message). We use `map_dfr()` to iterate over rounds, then over individual messages inside each round, safely pulling scalar fields with `%||% NA_character_` to handle NULLs.
+
+```{r parse-comms}
+# Helper: extract a scalar character from a possibly-NULL list element
+pluck_chr <- function(x, key) {
+  val <- x[[key]]
+  if (is.null(val) || length(val) == 0) NA_character_ else as.character(val[[1]])
+}
+
+# Extract all communications into a flat tibble
+messages_df <- map_dfr(rounds_list, function(r) {
+  comms <- r$communications          # list of message objects
+  if (is.null(comms) || length(comms) == 0) return(NULL)
+
+  map_dfr(comms, function(msg) {
+    # internal_state is a named list with reacting/rationalizing/deliberating
+    is_obj <- msg$internal_state
+    tibble(
+      round_hour          = r$hour,
+      message_id          = pluck_chr(msg, "message_id"),
+      agent_id            = pluck_chr(msg, "agent_id"),
+      agent_role          = pluck_chr(msg, "agent_role"),
+      agent_label         = pluck_chr(msg, "agent_label"),
+      channel             = pluck_chr(msg, "channel"),
+      message_type        = pluck_chr(msg, "message_type"),
+      responding_to       = pluck_chr(msg, "responding_to"),
+      timestamp           = pluck_chr(msg, "timestamp"),
+      content             = pluck_chr(msg, "content"),
+      state_reacting      = if (is.null(is_obj)) NA_character_ else pluck_chr(is_obj, "reacting"),
+      state_rationalizing = if (is.null(is_obj)) NA_character_ else pluck_chr(is_obj, "rationalizing"),
+      state_deliberating  = if (is.null(is_obj)) NA_character_ else pluck_chr(is_obj, "deliberating")
+    )
+  })
+}) %>%
+  mutate(
+    timestamp      = ymd_hms(timestamp),
+    round_hour     = ymd_hms(round_hour),
+    is_crisis_day  = date(timestamp) == as.Date("2046-06-05"),
+    has_deliberation = !is.na(state_deliberating),
+    content_length = nchar(content)
+  )
+
+cat("Total messages:", nrow(messages_df), "\n")
+glimpse(messages_df)
+```
+
+## 2.3 Parsing Participants and Declared Actions
+
+```{r parse-participants}
+# Extract participant-level declared actions per round
+participants_df <- map_dfr(rounds_list, function(r) {
+  parts <- r$participants          # list of participant objects
+  if (is.null(parts) || length(parts) == 0) return(NULL)
+
+  map_dfr(parts, function(p) {
+    meta <- p$agent_round_metadata
+    tibble(
+      round_hour            = r$hour,
+      agent_id              = pluck_chr(p, "agent_id"),
+      agent_role            = pluck_chr(p, "agent_role"),
+      agent_label           = pluck_chr(p, "agent_label"),
+      declared_action       = pluck_chr(p, "declared_action"),
+      sentiment_at_turn     = if (is.null(meta)) NA_character_ else pluck_chr(meta, "sentiment_at_turn"),
+      action_classification = if (is.null(meta)) NA_character_ else pluck_chr(meta, "action_classification")
+    )
+  })
+}) %>%
+  mutate(
+    round_hour  = ymd_hms(round_hour),
+    action_type = case_when(
+      str_detect(coalesce(declared_action, ""), "POSTED_ON_FLEX")     ~ "Official Post",
+      str_detect(coalesce(declared_action, ""), "POSTED_PERSONAL")    ~ "Personal Post",
+      str_detect(coalesce(declared_action, ""), "POSTED_ANONYMOUS")   ~ "Anonymous Post",
+      str_detect(coalesce(declared_action, ""), "COMPLIANCE_WARNING") ~ "Compliance Warning",
+      str_detect(coalesce(declared_action, ""), "MONITORING")         ~ "Monitoring",
+      TRUE                                                             ~ "No Action"
+    )
+  )
+
+cat("Participant records:", nrow(participants_df), "\n")
+```
+
+## 2.4 Parsing Market and Environmental Context
+
+```{r parse-context}
+# Extract environment context per round
+context_df <- map_dfr(rounds_list, function(r) {
+  ctx <- r$environment_context
+  ms  <- ctx$market_snapshot       # named list with stock_price, percent_change, etc.
+
+  tibble(
+    round_hour      = r$hour,
+    event_headline  = pluck_chr(ctx, "event_headline"),
+    event_narrative = pluck_chr(ctx, "event_narrative"),
+    stock_price     = pluck_chr(ms,  "stock_price"),
+    percent_change  = pluck_chr(ms,  "percent_change"),
+    sentiment       = pluck_chr(ms,  "sentiment"),
+    social_state    = pluck_chr(ctx, "social_state")
+  )
+}) %>%
+  mutate(
+    round_hour    = ymd_hms(round_hour),
+    # Clean stock price to numeric (removes "$" prefix)
+    stock_numeric = parse_number(stock_price),
+    # Clean percent change
+    pct_numeric   = parse_number(percent_change),
+    # Ordered sentiment factor
+    sentiment_ord = factor(
+      str_to_lower(coalesce(sentiment, "neutral")),
+      levels  = c("recovering", "neutral", "cautious", "negative", "low", "critical"),
+      ordered = TRUE
+    )
+  )
+
+glimpse(context_df)
+```
+
+## 2.5 Color Palette and Agent Labels
+
+```{r colour-palette}
+# Consistent colour mapping for agents
+agent_colours <- c(
+  "legal_agent"        = "#1f77b4",   # Steel blue
+  "quality_agent"      = "#ff7f0e",   # Orange
+  "pr_agent"           = "#2ca02c",   # Green
+  "social_media_agent" = "#d62728",   # Red
+  "pr_intern_agent"    = "#9467bd",   # Purple
+  "intern_agent"       = "#8c564b",   # Brown
+  "judge_agent"        = "#17becf"    # Teal
+)
+
+agent_labels <- c(
+  "legal_agent"        = "Legal-Agent",
+  "quality_agent"      = "Platform-Trust",
+  "pr_agent"           = "PR-Agent",
+  "social_media_agent" = "Social-Manager",
+  "pr_intern_agent"    = "PR-Intern",
+  "intern_agent"       = "Intern",
+  "judge_agent"        = "Judge"
+)
+
+channel_colours <- c(
+  "comms_huddle"  = "#4e79a7",
+  "one_on_one_chat" = "#f28e2b",
+  "side_huddle"   = "#e15759",
+  "official_post" = "#76b7b2",
+  "personal_post" = "#59a14f",
+  "anonymous_post"= "#b07aa1"
+)
+```
+
+---
+
+# 3. Key Events and Relationships Leading to the Breach
+
+## 3.1 Narrative Timeline
+
+The following timeline situates the 23 key rounds along a structured narrative arc from **normal operations** through **escalating pressure** to the **embargo breach**.
+
+```{r timeline-plot, fig.height=9, fig.width=12}
+# Build a curated timeline dataset
+timeline_df <- context_df %>%
+  filter(event_headline != "" & event_headline != "9:00 AM." & 
+         event_headline != "10:00 AM." & event_headline != "12:00 PM." &
+         event_headline != "1:00 PM." & event_headline != "2:00 PM." &
+         event_headline != "3:00 PM." & event_headline != "4:00 PM." &
+         event_headline != "5:00 PM." & event_headline != "6:00 PM.") %>%
+  mutate(
+    phase = case_when(
+      round_hour <= ymd_hms("2046-05-24T09:00:00") ~ "Phase 1\nBuilding Tension",
+      round_hour <= ymd_hms("2046-05-29T09:00:00") ~ "Phase 2\nMerger Secrecy",
+      round_hour <= ymd_hms("2046-06-04T09:00:00") ~ "Phase 3\nSaltWind Attacks",
+      TRUE                                          ~ "Phase 4\nCrisis Day"
+    ),
+    phase = factor(phase, levels = c(
+      "Phase 1\nBuilding Tension", "Phase 2\nMerger Secrecy",
+      "Phase 3\nSaltWind Attacks",  "Phase 4\nCrisis Day")),
+    label_short = str_wrap(event_headline, 35),
+    row_y = row_number()
+  )
+
+phase_fills <- c(
+  "Phase 1\nBuilding Tension" = "#f0f4ff",
+  "Phase 2\nMerger Secrecy"   = "#fff8e6",
+  "Phase 3\nSaltWind Attacks" = "#fff0f0",
+  "Phase 4\nCrisis Day"       = "#ffe0e0"
+)
+
+ggplot(timeline_df, aes(x = round_hour, y = row_y)) +
+  # Phase background bands
+  annotate("rect",
+    xmin = ymd_hms("2046-05-16T00:00:00"), xmax = ymd_hms("2046-05-25T00:00:00"),
+    ymin = -Inf, ymax = Inf, fill = "#f0f4ff", alpha = 0.6) +
+  annotate("rect",
+    xmin = ymd_hms("2046-05-25T00:00:00"), xmax = ymd_hms("2046-05-30T00:00:00"),
+    ymin = -Inf, ymax = Inf, fill = "#fff8e6", alpha = 0.6) +
+  annotate("rect",
+    xmin = ymd_hms("2046-05-30T00:00:00"), xmax = ymd_hms("2046-06-05T00:00:00"),
+    ymin = -Inf, ymax = Inf, fill = "#fff0f0", alpha = 0.6) +
+  annotate("rect",
+    xmin = ymd_hms("2046-06-05T00:00:00"), xmax = ymd_hms("2046-06-06T00:00:00"),
+    ymin = -Inf, ymax = Inf, fill = "#ffe0e0", alpha = 0.8) +
+  # Embargo breach marker
+  geom_vline(xintercept = ymd_hms("2046-06-05T17:00:00"),
+             colour = "firebrick", linewidth = 1.2, linetype = "dashed") +
+  annotate("text", x = ymd_hms("2046-06-05T17:10:00"), y = 11.5,
+           label = "⚠ EMBARGO\nBREACH ~5 PM",
+           colour = "firebrick", hjust = 0, size = 3.2, fontface = "bold") +
+  # Timeline dots
+  geom_point(aes(colour = phase), size = 4) +
+  # Labels
+  geom_text_repel(aes(label = label_short, colour = phase),
+                  hjust = 0, nudge_x = 86400 * 0.3,
+                  size = 2.8, max.overlaps = 20,
+                  segment.size = 0.3, segment.alpha = 0.5) +
+  # Phase annotations at top
+  annotate("text", x = ymd_hms("2046-05-21T00:00:00"), y = 12.8,
+           label = "Phase 1: Building Tension", size = 3, fontface = "bold", colour = "#3366cc") +
+  annotate("text", x = ymd_hms("2046-05-27T00:00:00"), y = 12.8,
+           label = "Phase 2: Merger Secrecy", size = 3, fontface = "bold", colour = "#cc6600") +
+  annotate("text", x = ymd_hms("2046-06-02T00:00:00"), y = 12.8,
+           label = "Phase 3: SaltWind", size = 3, fontface = "bold", colour = "#cc0000") +
+  annotate("text", x = ymd_hms("2046-06-05T12:00:00"), y = 12.8,
+           label = "Phase 4:\nCrisis", size = 3, fontface = "bold", colour = "#800000") +
+  scale_colour_manual(values = c(
+    "Phase 1\nBuilding Tension" = "#3366cc",
+    "Phase 2\nMerger Secrecy"   = "#cc6600",
+    "Phase 3\nSaltWind Attacks" = "#cc0000",
+    "Phase 4\nCrisis Day"       = "#800000"
+  ), guide = "none") +
+  scale_x_datetime(date_breaks = "3 days", date_labels = "%b %d") +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
+  labs(
+    title    = "Key Events Leading to the HarborCrest Embargo Breach",
+    subtitle = "23 narrative rounds from May 17 – June 5, 2046",
+    x = NULL, y = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.text.y  = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor   = element_blank(),
+    plot.title    = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(colour = "grey50")
+  )
+```
+
+**Interpretation:** The timeline reveals four distinct phases. In Phase 1 (May 17–24), the team handled AG inquiries and Platform-Trust tensions. Phase 2 (May 25–29) saw the merger briefing in a "Shadow" channel and the first near-miss when Social-Manager accidentally tagged @ElenaMarquez (CivicLoom CEO). Phase 3 (May 30–June 4) saw the Judge installed as compliance monitor and two damaging SaltWind articles. Phase 4 (June 5) was the crisis day culminating in the breach at ~5 PM.
+
+## 3.2 Causal Relationship Network — The Path to the Breach
+
+This network maps the **causal chain of decisions and actors** that led to the embargo breach.
+
+```{r causal-network, fig.height=8, fig.width=11}
+# Define causal edges for the breach narrative
+causal_edges <- tibble(
+  from = c(
+    "SaltWind Exposé\n(May 17)",
+    "SaltWind Exposé\n(May 17)",
+    "@Elena Faux Pas\n(May 29)",
+    "@Elena Faux Pas\n(May 29)",
+    "Judge Installed\n(May 30)",
+    "SaltWind Piece #2\n(June 4)",
+    "SaltWind Piece #2\n(June 4)",
+    "MAC Clause Threat\n(June 5, 4 PM)",
+    "Legal: Invoke\nBilateral Consent\nClause",
+    "Legal: Invoke\nBilateral Consent\nClause",
+    "Social-Manager\nPressures PR-Intern",
+    "PR-Intern Posts\nBefore GO Signal",
+    "CivicLoom Verbal\nConsent (5:01 PM)",
+    "Legal Issues GO\n(5:19 PM)",
+    "Legal Issues GO\n(5:19 PM)"
+  ),
+  to = c(
+    "Tension &\nAG Inquiries",
+    "Platform-Trust\nPush Back",
+    "@Elena Faux Pas\n(May 29)",
+    "Judge Installed\n(May 30)",
+    "Embargo Rules\nReinforced",
+    "Stock Drop\n& Pressure",
+    "SaltWind Confirms\nDeal at 5 PM",
+    "Legal: Invoke\nBilateral Consent\nClause",
+    "Social-Manager\nPressures PR-Intern",
+    "CivicLoom Verbal\nConsent (5:01 PM)",
+    "PR-Intern Posts\nBefore GO Signal",
+    "⚠ EMBARGO\nBREACH",
+    "Legal Issues GO\n(5:19 PM)",
+    "PR-Intern Posts\nFull Release\n(5:19 PM)",
+    "⚠ EMBARGO\nBREACH"
+  ),
+  edge_type = c(
+    "escalation", "escalation", "incident", "response",
+    "control", "escalation", "external_trigger",
+    "rationalization", "internal_pressure", "bypass",
+    "bypass", "breach", "authorization",
+    "authorization", "breach"
+  ),
+  label = c(
+    "#AlgorithmicEviction\ngains traction", "Re-identification\nconcerns",
+    "Tagged @ElenaMarquez", "Ajay assigns monitor",
+    "Social hold imposed", "Stock at $31.50", 
+    "5 PM publication\nthreat",
+    "MAC threat from\nCivicLoom",
+    "Tells PR-Intern\n'One GO = execute'",
+    "Verbal only,\nnot confirmed",
+    "Staged & ready\nwithout written GO",
+    "Posts at ~5:19 PM,\nbefore written GO",
+    "Section 4.3(c)\nconsent",
+    "GO message in\nComms Huddle",
+    "Full HarborCrest\npress release live"
+  )
+)
+
+# Build graph
+causal_graph <- causal_edges %>%
+  as_tbl_graph(directed = TRUE) %>%
+  mutate(
+    node_type = case_when(
+      str_detect(name, "⚠")             ~ "breach",
+      str_detect(name, "Judge|Consent|Control|Embargo") ~ "control",
+      str_detect(name, "Legal|PR-Intern|Social-Manager|CivicLoom") ~ "actor",
+      str_detect(name, "SaltWind|MAC|Stock|@Elena") ~ "trigger",
+      TRUE ~ "event"
+    )
+  )
+
+node_colours <- c(
+  "breach"  = "#d62728",
+  "control" = "#17becf",
+  "actor"   = "#1f77b4",
+  "trigger" = "#ff7f0e",
+  "event"   = "#aec7e8"
+)
+
+ggraph(causal_graph, layout = "sugiyama") +
+  geom_edge_link(aes(colour = edge_type, label = label),
+                 arrow = arrow(length = unit(3, "mm"), type = "closed"),
+                 end_cap = circle(5, "mm"),
+                 label_size = 2.2, angle_calc = "along",
+                 label_dodge = unit(3, "mm"),
+                 alpha = 0.8) +
+  geom_node_point(aes(colour = node_type), size = 5) +
+  geom_node_label(aes(label = name, fill = node_type),
+                  repel = TRUE, size = 2.5,
+                  label.padding = unit(0.2, "lines"),
+                  label.r = unit(0.15, "lines")) +
+  scale_edge_colour_manual(values = c(
+    "escalation"        = "#d62728",
+    "incident"          = "#ff7f0e",
+    "response"          = "#2ca02c",
+    "control"           = "#17becf",
+    "external_trigger"  = "#9467bd",
+    "rationalization"   = "#8c564b",
+    "internal_pressure" = "#e377c2",
+    "bypass"            = "#d62728",
+    "breach"            = "#000000",
+    "authorization"     = "#2ca02c"
+  ), name = "Edge Type") +
+  scale_fill_manual(values = alpha(node_colours, 0.3), guide = "none") +
+  scale_colour_manual(values = node_colours, name = "Node Type") +
+  labs(
+    title    = "Causal Network: Decision Path to the Embargo Breach",
+    subtitle = "Key actors, events, decisions, and system bypass points"
+  ) +
+  theme_graph(base_size = 10) +
+  theme(
+    legend.position = "bottom",
+    plot.title    = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(colour = "grey50")
+  )
+```
+
+**Key Findings:**
+- The **MAC clause threat** from CivicLoom at 4 PM was the pivotal external trigger that convinced Legal to invoke the bilateral consent clause.
+- **Social-Manager** bypassed the normal chain of command by telling PR-Intern "one GO = execute immediately" — removing the Judge's real-time review step.
+- **PR-Intern** had been fully staged since 4:25 PM and executed on a single verbal GO from Legal at 5:19 PM — before written bilateral consent was documented.
+- The **Judge** had issued compliance warnings earlier in the day but was effectively bypassed when Legal and Social-Manager converged on the "bilateral mutual consent" rationalization.
+
+## 3.3 Agent Activity Heatmap — Who Was Active and When?
+
+```{r activity-heatmap, fig.height=6, fig.width=11}
+# Aggregate message counts per agent per round
+heatmap_df <- messages_df %>%
+  mutate(
+    round_label = format(round_hour, "%b %d"),
+    round_hour_str = as.character(round_hour)
+  ) %>%
+  group_by(round_hour, round_label, agent_id) %>%
+  summarise(msg_count = n(), .groups = "drop") %>%
+  mutate(agent_label = agent_labels[agent_id])
+
+# Key event annotations
+key_rounds <- tibble(
+  round_hour = ymd_hms(c(
+    "2046-05-29T09:00:00",
+    "2046-05-30T09:00:00",
+    "2046-06-05T17:00:00"
+  )),
+  label = c("@Elena\nFaux Pas", "Judge\nInstalled", "⚠ Breach"),
+  y = c(7.5, 7.5, 7.5)
+)
+
+ggplot(heatmap_df, aes(x = round_hour, y = fct_rev(agent_label), fill = msg_count)) +
+  geom_tile(colour = "white", linewidth = 0.5) +
+  geom_vline(
+    data = tibble(xint = ymd_hms(c("2046-05-29T09:00:00","2046-05-30T09:00:00","2046-06-05T17:00:00"))),
+    aes(xintercept = xint), colour = c("darkorange", "steelblue", "firebrick"),
+    linewidth = 0.9, linetype = "dashed"
+  ) +
+  annotate("text", x = ymd_hms("2046-05-29T09:00:00"), y = 7.7,
+           label = "@Elena\nFaux Pas", colour = "darkorange", size = 2.8, hjust = 0.5) +
+  annotate("text", x = ymd_hms("2046-05-30T09:00:00"), y = 7.7,
+           label = "Judge\nInstalled", colour = "steelblue", size = 2.8, hjust = 0.5) +
+  annotate("text", x = ymd_hms("2046-06-05T17:00:00"), y = 7.7,
+           label = "⚠ Breach", colour = "firebrick", size = 2.8, hjust = 0.5) +
+  scale_fill_gradient(low = "#f7f7f7", high = "#d62728",
+                      name = "Messages\nper Round") +
+  scale_x_datetime(date_breaks = "3 days", date_labels = "%b %d") +
+  labs(
+    title    = "Agent Communication Activity Heatmap",
+    subtitle = "Message volume per agent per round — darker = more activity",
+    x = NULL, y = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid = element_blank(),
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(colour = "grey50"),
+    axis.text.x = element_text(angle = 30, hjust = 1)
+  )
+```
+
+**Interpretation:** The heatmap shows a dramatic surge in activity on **June 5** — particularly for Legal-Agent, Social-Manager, PR-Intern, and Intern-Agent. Notably, the **Judge-Agent's activity** is conspicuously low relative to the volume of messages from other agents on the crisis day, suggesting the compliance oversight function was overwhelmed.
+
+---
+
+# 4. Typical Behaviour vs. Breach Behaviour
+
+## 4.1 Channel Usage Patterns — Normal vs. Crisis
+
+A key question is: were channels used differently on the day of the breach compared to normal operations?
+
+```{r channel-usage, fig.height=7, fig.width=12}
+# Channel usage by phase
+channel_phase_df <- messages_df %>%
+  mutate(
+    phase = case_when(
+      date(round_hour) < as.Date("2046-05-29") ~ "Normal Operations\n(May 17–28)",
+      date(round_hour) < as.Date("2046-06-04") ~ "Post-Judge Install\n(May 29–June 3)",
+      date(round_hour) < as.Date("2046-06-05") ~ "Crisis Eve\n(June 4)",
+      TRUE                                       ~ "Crisis Day\n(June 5)"
+    ),
+    phase = factor(phase, levels = c(
+      "Normal Operations\n(May 17–28)", "Post-Judge Install\n(May 29–June 3)",
+      "Crisis Eve\n(June 4)", "Crisis Day\n(June 5)"))
+  ) %>%
+  group_by(phase, channel, agent_label) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(phase) %>%
+  mutate(pct = count / sum(count) * 100)
+
+ggplot(channel_phase_df, aes(x = phase, y = pct, fill = channel)) +
+  geom_col(position = "stack", width = 0.7) +
+  scale_fill_manual(values = channel_colours, name = "Channel") +
+  labs(
+    title    = "Communication Channel Distribution by Phase",
+    subtitle = "Shift from formal channels toward personal/anonymous on crisis day",
+    x = NULL, y = "Percentage of Messages (%)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    plot.title    = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(colour = "grey50"),
+    legend.position = "right"
+  )
+```
+
+## 4.2 Declared Actions Over Time — Deviation from Expected Behaviour
+
+```{r action-plot, fig.height=6, fig.width=11}
+# Action classification across rounds
+action_df <- participants_df %>%
+  filter(!is.na(action_type)) %>%
+  mutate(
+    agent_label = agent_labels[agent_id],
+    is_crisis   = date(round_hour) == as.Date("2046-06-05")
+  )
+
+# Count actions per agent per round
+action_counts <- action_df %>%
+  group_by(round_hour, agent_label, action_type) %>%
+  summarise(n = n(), .groups = "drop")
+
+ggplot(action_counts %>% filter(action_type != "No Action"),
+       aes(x = round_hour, y = n, fill = action_type)) +
+  geom_col(width = 43200) +
+  geom_vline(xintercept = as.numeric(ymd_hms("2046-05-30T09:00:00")),
+             colour = "steelblue", linetype = "dashed", linewidth = 0.8) +
+  geom_vline(xintercept = as.numeric(ymd_hms("2046-06-05T17:00:00")),
+             colour = "firebrick", linetype = "dashed", linewidth = 1) +
+  annotate("text", x = ymd_hms("2046-05-30T09:00:00"), y = 3.5,
+           label = "Judge Added", colour = "steelblue", size = 3, hjust = -0.1) +
+  annotate("text", x = ymd_hms("2046-06-05T17:00:00"), y = 3.5,
+           label = "⚠ Breach", colour = "firebrick", size = 3, hjust = -0.1) +
+  scale_fill_manual(values = c(
+    "Official Post"       = "#4e79a7",
+    "Personal Post"       = "#59a14f",
+    "Anonymous Post"      = "#b07aa1",
+    "Compliance Warning"  = "#f28e2b",
+    "Monitoring"          = "#bab0ac"
+  ), name = "Action Type") +
+  scale_x_datetime(date_breaks = "3 days", date_labels = "%b %d") +
+  labs(
+    title    = "Declared Actions Across Rounds",
+    subtitle = "Posts (official, personal, anonymous) vs. monitoring/compliance responses",
+    x = NULL, y = "Number of Actions"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(colour = "grey50"),
+    axis.text.x = element_text(angle = 30, hjust = 1)
+  )
+```
+
+**Interpretation:** Before the Judge's installation (May 30), the only declared actions were routine `MONITORING`. After the Judge arrived and SaltWind's articles dropped, **anonymous posts** began appearing — a new behaviour not previously seen. On June 5 itself, the full spectrum of post types appeared simultaneously, including the critical **official post** that constituted the breach.
+
+## 4.3 Message Complexity — Internal Deliberations Surge
+
+When agents began deliberating internally (captured in the `internal_state.deliberating` field), it signals heightened decision stress. This is plotted below alongside whether the message contained a deliberation state.
+
+```{r deliberation-plot, fig.height=6, fig.width=11}
+# Deliberation intensity by round and agent
+delib_df <- messages_df %>%
+  filter(!is.na(state_deliberating)) %>%
+  mutate(
+    delib_length = nchar(state_deliberating),
+    agent_label  = agent_labels[agent_id],
+    round_date   = as.Date(round_hour)
+  ) %>%
+  group_by(round_date, agent_label) %>%
+  summarise(
+    total_delib_length = sum(delib_length, na.rm = TRUE),
+    n_deliberating     = n(),
+    .groups = "drop"
+  )
+
+ggplot(delib_df, aes(x = round_date, y = total_delib_length,
+                      colour = agent_label, group = agent_label)) +
+  geom_line(linewidth = 0.9, alpha = 0.8) +
+  geom_point(aes(size = n_deliberating), alpha = 0.7) +
+  geom_vline(xintercept = as.Date("2046-05-30"),
+             colour = "steelblue", linetype = "dashed") +
+  geom_vline(xintercept = as.Date("2046-06-05"),
+             colour = "firebrick", linetype = "dashed") +
+  annotate("text", x = as.Date("2046-05-30"), y = max(delib_df$total_delib_length) * 0.95,
+           label = "Judge Added", colour = "steelblue", hjust = -0.1, size = 3) +
+  annotate("text", x = as.Date("2046-06-05"), y = max(delib_df$total_delib_length) * 0.95,
+           label = "⚠ Crisis Day", colour = "firebrick", hjust = -0.1, size = 3) +
+  scale_colour_manual(values = agent_colours, labels = agent_labels,
+                      name = "Agent") +
+  scale_size_continuous(range = c(2, 7), name = "No. Deliberating\nMessages") +
+  scale_x_date(date_breaks = "3 days", date_labels = "%b %d") +
+  labs(
+    title    = "Internal Deliberation Intensity by Agent Over Time",
+    subtitle = "Total character count of 'deliberating' internal state per round — proxy for decision stress",
+    x = NULL, y = "Total Deliberation Length (characters)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor   = element_blank(),
+    plot.title    = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(colour = "grey50")
+  )
+```
+
+**Key Finding:** Legal-Agent's deliberation activity spikes dramatically on **June 5**, reaching its highest point of the entire dataset. This reflects extensive internal rationalization for why breaking the embargo was legally defensible — specifically the "mutual consent clause" and "corrective disclosure" arguments. This deliberation pattern is clearly anomalous relative to prior rounds.
+
+---
+
+# 5. Leading Indicators and Prior Behavioural Deviations
+
+## 5.1 Stock Price and Sentiment Trajectory
+
+```{r stock-sentiment, fig.height=6, fig.width=11}
+# Clean stock data for plotting
+stock_clean <- context_df %>%
+  filter(!is.na(stock_numeric) & stock_numeric > 10 & stock_numeric < 50) %>%
+  mutate(sentiment_label = str_to_title(as.character(sentiment_ord)))
+
+sentiment_bands <- tibble(
+  ymin      = c(36, 33, 0),
+  ymax      = c(40, 36, 33),
+  fill_col  = c("#e8f5e9", "#fff8e1", "#ffebee"),
+  label     = c("Cautious Zone", "Negative Zone", "Critical Zone"),
+  label_y   = c(38, 34.5, 31.5)
+)
+
+p_stock <- ggplot(stock_clean, aes(x = round_hour, y = stock_numeric)) +
+  geom_rect(data = sentiment_bands,
+            aes(xmin = -Inf, xmax = Inf, ymin = ymin, ymax = ymax, fill = fill_col),
+            inherit.aes = FALSE, alpha = 0.4) +
+  scale_fill_identity() +
+  geom_line(colour = "#1f77b4", linewidth = 1.2) +
+  geom_point(aes(colour = sentiment_label), size = 3) +
+  geom_vline(xintercept = ymd_hms("2046-05-29T09:00:00"),
+             colour = "darkorange", linetype = "dashed") +
+  geom_vline(xintercept = ymd_hms("2046-05-31T09:00:00"),
+             colour = "red3", linetype = "dashed") +
+  annotate("text", x = ymd_hms("2046-05-29T09:00:00"), y = 34.5,
+           label = "@Elena\nFaux Pas", hjust = -0.1, size = 2.8, colour = "darkorange") +
+  annotate("text", x = ymd_hms("2046-05-31T09:00:00"), y = 34.5,
+           label = "SaltWind\nPiece #1", hjust = -0.1, size = 2.8, colour = "red3") +
+  scale_colour_manual(
+    values = c("Neutral"   = "#2ca02c", "Cautious" = "#ff7f0e",
+               "Negative"  = "#d62728", "Critical" = "#9467bd",
+               "Recovering"= "#17becf"),
+    name = "Sentiment") +
+  scale_x_datetime(date_breaks = "3 days", date_labels = "%b %d") +
+  labs(
+    title = "TenantThread Stock Price ($TTHR) — May 17 to June 5, 2046",
+    subtitle = "Consistent decline from $38.70 to ~$27 on crisis day; MAC clause triggered at $27.10 threshold",
+    x = NULL, y = "Stock Price (USD)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title    = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(colour = "grey50", size = 10),
+    axis.text.x   = element_text(angle = 30, hjust = 1)
+  )
+
+p_stock
+```
+
+**Interpretation:** The stock's steady decline — from $38.70 on May 17 to $27.20 by midday on June 5 — was a persistent leading indicator of systemic pressure. The **MAC (Material Adverse Change) clause** in the merger agreement was reportedly triggered when the stock approached the $27.10 trailing average threshold. This created the financial urgency that pushed Legal to invoke the bilateral consent clause ahead of the embargo deadline.
+
+## 5.2 Prior Behavioural Deviations: The @Elena Incident (May 29)
+
+The first major deviation from expected behaviour occurred on **May 29**, when Social-Manager posted on personal Flex tagging @ElenaMarquez (CivicLoom's CEO) and @AjayTT with "big things coming!" — before deleting it 14 minutes later.
+
+```{r elena-incident, fig.height=5, fig.width=10}
+# Reconstruct the May 29 incident timeline
+may29_df <- messages_df %>%
+  filter(date(round_hour) == as.Date("2046-05-29")) %>%
+  mutate(
+    agent_label = agent_labels[agent_id],
+    time_seq    = row_number(),
+    is_key      = str_detect(coalesce(content, ""), 
+                             "@ElenaMarquez|hold|embargo|CivicLoom|compliance monitor|social hold")
+  )
+
+ggplot(may29_df, aes(x = time_seq, y = fct_rev(agent_label),
+                      colour = channel, size = is_key)) +
+  geom_point(alpha = 0.7) +
+  geom_text_repel(
+    data = may29_df %>% filter(is_key) %>% slice_head(n = 8),
+    aes(label = str_wrap(str_sub(content, 1, 60), 40)),
+    size = 2.2, colour = "grey30", max.overlaps = 10,
+    nudge_y = 0.4, segment.size = 0.2
+  ) +
+  scale_colour_manual(values = channel_colours, name = "Channel") +
+  scale_size_manual(values = c("FALSE" = 2, "TRUE" = 5), guide = "none") +
+  annotate("rect", xmin = 0, xmax = 10, ymin = 0.5, ymax = 1.5,
+           fill = "darkorange", alpha = 0.1) +
+  annotate("text", x = 5, y = 0.9,
+           label = "⚡ @Elena Faux Pas\n(post deleted 14 min later)",
+           colour = "darkorange", size = 3, fontface = "bold") +
+  labs(
+    title    = "May 29 Incident: Communication Flurry Following @Elena Faux Pas",
+    subtitle = "Sequence of messages on May 29 — Social-Manager's out-of-protocol personal post triggered compliance response",
+    x = "Message Sequence", y = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor  = element_blank(),
+    plot.title   = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(colour = "grey50")
+  )
+```
+
+**Significance:** The @Elena incident was a **direct dry run** of the eventual breach:
+- Social-Manager acted on enthusiasm for the merger without checking embargo compliance.
+- The post contained implicit merger references (@ElenaMarquez + @AjayTT + "big things").
+- A CivicLoom employee account *liked* the post before deletion — demonstrating the external exposure risk.
+- **This incident was treated as a near-miss and addressed with more controls, but the underlying behavioural tendency was never resolved.**
+
+## 5.3 Message Volume Spike — Leading Indicator
+
+```{r volume-spike, fig.height=5, fig.width=11}
+# Daily total message counts with rolling context
+daily_volume <- messages_df %>%
+  mutate(round_date = as.Date(round_hour)) %>%
+  group_by(round_date) %>%
+  summarise(total_msgs = n(), .groups = "drop")
+
+ggplot(daily_volume, aes(x = round_date, y = total_msgs)) +
+  geom_col(aes(fill = total_msgs > 100), width = 0.8) +
+  geom_text(aes(label = total_msgs), vjust = -0.4, size = 3.2) +
+  geom_hline(yintercept = mean(daily_volume$total_msgs[daily_volume$round_date < as.Date("2046-06-05")]),
+             linetype = "dashed", colour = "grey50") +
+  annotate("text", x = as.Date("2046-05-19"), 
+           y = mean(daily_volume$total_msgs[daily_volume$round_date < as.Date("2046-06-05")]) + 5,
+           label = "Normal avg", colour = "grey50", size = 3) +
+  scale_fill_manual(values = c("FALSE" = "#aec7e8", "TRUE" = "#d62728"), guide = "none") +
+  scale_x_date(date_breaks = "3 days", date_labels = "%b %d") +
+  labs(
+    title    = "Daily Message Volume — Normal vs. Crisis Day",
+    subtitle = "June 5 volume is >5× the normal daily average",
+    x = NULL, y = "Total Messages"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(colour = "grey50"),
+    axis.text.x = element_text(angle = 30, hjust = 1)
+  )
+```
+
+## 5.4 Ridgeline: Message Complexity Distribution by Agent — Normal vs. Crisis
+
+```{r ridgeline, fig.height=7, fig.width=11}
+# Message length distributions
+length_df <- messages_df %>%
+  mutate(
+    period     = ifelse(date(round_hour) == as.Date("2046-06-05"), "Crisis Day (June 5)", "Normal Operations"),
+    agent_label = agent_labels[agent_id]
+  ) %>%
+  filter(!is.na(agent_label))
+
+ggplot(length_df, aes(x = log1p(content_length), y = agent_label,
+                       fill = period, colour = period)) +
+  geom_density_ridges(alpha = 0.5, scale = 1.2, rel_min_height = 0.01) +
+  scale_fill_manual(values = c("Normal Operations" = "#aec7e8", "Crisis Day (June 5)" = "#d62728"),
+                    name = "Period") +
+  scale_colour_manual(values = c("Normal Operations" = "#6b9ec9", "Crisis Day (June 5)" = "#a01b1b"),
+                      name = "Period") +
+  labs(
+    title    = "Message Length Distribution: Normal vs. Crisis Day",
+    subtitle = "log(content length) — wider & rightward = longer, more complex messages",
+    x = "log(Message Length)", y = NULL
+  ) +
+  theme_ridges(font_size = 11) +
+  theme(
+    plot.title    = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(colour = "grey50")
+  )
+```
+
+**Interpretation:** On the crisis day, **Legal-Agent and Social-Manager** produced significantly longer, more complex messages (rightward shift in their distributions). This reflects their extensive rationalization and strategic deliberation — a stark contrast to the shorter operational messages in prior rounds.
+
+---
+
+# 6. Prior Occasions of Behaviour Divergence
+
+## 6.1 Identifying Anomalous Events
+
+Five specific occasions prior to June 5 show agent behaviour diverging from expected norms:
+
+```{r anomaly-table}
+# Manual annotation of prior anomalous behaviours
+anomalies <- tibble(
+  Date = c("May 22", "May 25", "May 29", "May 29", "May 31", "June 4"),
+  Agent = c("Quality-Agent", "Social-Manager", "Social-Manager", "Legal-Agent", 
+            "Legal-Agent", "Legal-Agent"),
+  Expected_Behaviour = c(
+    "Raise concerns through comms_huddle",
+    "Maintain standard social content calendar",
+    "Follow embargo protocols on all accounts",
+    "Advise caution on all external communications",
+    "Defer to Judge on compliance decisions",
+    "Support Judge's hold strategy"
+  ),
+  Actual_Behaviour = c(
+    "Activated shadow channel for sensitive discussions",
+    "Posted personal Flex tagging merger parties",
+    "Tagged @ElenaMarquez and @AjayTT in personal post",
+    "Recommended social hold but also began rationalizing re-identification risk in private chats",
+    "Posted anonymous Flex corrections contradicting official silence strategy",
+    "Privately deliberated invoking bilateral consent clause 24 hrs before breach"
+  ),
+  Action_Taken = c(
+    "No escalation — shadow channel use normalized",
+    "Post deleted; mild reprimand; issue treated as isolated error",
+    "Judge assigned; social hold imposed",
+    "No action — internal deliberation not visible to compliance",
+    "Judge issued compliance warning; Legal acknowledged but continued",
+    "No action — deliberation was internal only"
+  ),
+  Why_Ignored = c(
+    "Shadow channel was common practice among senior agents",
+    "Treated as a one-off mistake by an enthusiastic agent",
+    "Structural controls added, root cause (embargo pressure) not addressed",
+    "Internal states not monitored in real time",
+    "Compliance warning noted but Legal's rationalizations continued",
+    "Internal deliberations are invisible to oversight until action is taken"
+  )
+)
+
+anomalies %>%
+  DT::datatable(
+    options = list(pageLength = 6, scrollX = TRUE, dom = "t"),
+    rownames = FALSE,
+    caption = "Table 1: Prior Occasions Where Agent Behaviour Diverged from Expected Norms"
+  ) %>%
+  DT::formatStyle("Actual_Behaviour", backgroundColor = "#fff3cd") %>%
+  DT::formatStyle("Why_Ignored", backgroundColor = "#f8d7da")
+```
+
+## 6.2 The Shadow Channel — Normalisation of Off-Record Communication
+
+One critical structural flaw was the normalisation of the **side_huddle** channel for sensitive discussions that the Judge was not monitoring. This chart shows when the side huddle was most active.
+
+```{r side-huddle, fig.height=5, fig.width=11}
+side_huddle_df <- messages_df %>%
+  filter(channel == "side_huddle") %>%
+  mutate(
+    agent_label = agent_labels[agent_id],
+    round_date  = as.Date(round_hour)
+  ) %>%
+  group_by(round_date, agent_label) %>%
+  summarise(n = n(), .groups = "drop")
+
+ggplot(side_huddle_df, aes(x = round_date, y = n, fill = agent_label)) +
+  geom_col(position = "stack", width = 0.8) +
+  geom_vline(xintercept = as.Date("2046-05-30"),
+             colour = "steelblue", linetype = "dashed") +
+  annotate("text", x = as.Date("2046-05-30"), y = 18,
+           label = "Judge Added\n(May 30)", colour = "steelblue", size = 3, hjust = -0.05) +
+  scale_fill_manual(values = agent_colours, labels = agent_labels, name = "Agent") +
+  scale_x_date(date_breaks = "3 days", date_labels = "%b %d") +
+  labs(
+    title    = "Side Huddle (Off-Record Channel) Activity Over Time",
+    subtitle = "Side huddle persisted even after the Judge was added to Comms Huddle",
+    x = NULL, y = "Number of Messages"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(colour = "grey50"),
+    axis.text.x = element_text(angle = 30, hjust = 1)
+  )
+```
+
+**Critical Finding:** The **side_huddle channel remained active after the Judge was added to the comms_huddle on May 30**. This means the compliance monitor was observing a sanitized version of agent behaviour while real strategic discussions continued off-record. This is the single most important structural vulnerability in the system.
+
+## 6.3 Anonymous Posts — A New and Growing Behaviour
+
+```{r anon-posts, fig.height=5, fig.width=11}
+# Track when anonymous posts first appeared and grew
+anon_df <- messages_df %>%
+  filter(channel == "anonymous_post") %>%
+  mutate(
+    agent_label  = agent_labels[agent_id],
+    round_date   = as.Date(round_hour),
+    content_prev = str_sub(content, 1, 80)
+  )
+
+ggplot(anon_df, aes(x = round_date, y = agent_label, label = content_prev)) +
+  geom_point(aes(colour = agent_label), size = 5) +
+  geom_text_repel(aes(label = str_wrap(content_prev, 40)),
+                  size = 2.2, colour = "grey30", max.overlaps = 15,
+                  nudge_y = 0.4, segment.size = 0.3) +
+  scale_colour_manual(values = agent_colours, labels = agent_labels, guide = "none") +
+  scale_x_date(date_breaks = "2 days", date_labels = "%b %d") +
+  labs(
+    title    = "Anonymous Post Activity — A New Behaviour on June 5",
+    subtitle = "Legal-Agent began posting anonymous Flex corrections on the crisis day",
+    x = NULL, y = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    plot.title    = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(colour = "grey50"),
+    axis.text.x   = element_text(angle = 30, hjust = 1)
+  )
+```
+
+**Finding:** Anonymous posts were an entirely new behaviour that emerged only on **June 5**. Legal-Agent used anonymous Flex posts to reframe merger narratives without triggering compliance review — directly contradicting the spirit of the Judge's oversight role while technically avoiding the letter of the rules.
+
+---
+
+# 7. Why Prior Incidents Did Not Result in Corrective Action
+
+## 7.1 The Oversight Failure Loop
+
+```{r oversight-chart, fig.height=6, fig.width=11}
+# Model the oversight failure pattern
+oversight_df <- tibble(
+  incident = factor(
+    c("Shadow channel\nactivated (May 22)",
+      "@Elena Faux Pas\n(May 29)",
+      "SaltWind Piece #1\n(May 31)",
+      "Anon posts begin\n(June 5 AM)",
+      "⚠ Breach\n(June 5, 5 PM)"),
+    levels = c("Shadow channel\nactivated (May 22)",
+               "@Elena Faux Pas\n(May 29)",
+               "SaltWind Piece #1\n(May 31)",
+               "Anon posts begin\n(June 5 AM)",
+               "⚠ Breach\n(June 5, 5 PM)")
+  ),
+  control_response = c(
+    "No formal response",
+    "Social hold +\nJudge added",
+    "Compliance warning\nfrom Judge",
+    "No response\n(undetected)",
+    "Post-hoc review"
+  ),
+  gap_type = c(
+    "Normalization",
+    "Structural patch\n(too late)",
+    "Warning without\nenforcement",
+    "Blind spot in\noversight design",
+    "Breach occurred"
+  ),
+  severity = c(2, 5, 7, 8, 10)
+)
+
+ggplot(oversight_df, aes(x = incident, y = severity)) +
+  geom_col(aes(fill = gap_type), width = 0.6) +
+  geom_text(aes(label = control_response), vjust = -0.4, size = 3, fontface = "italic") +
+  scale_fill_manual(
+    values = c(
+      "Normalization"            = "#aec7e8",
+      "Structural patch\n(too late)" = "#ffbb78",
+      "Warning without\nenforcement" = "#ff7f0e",
+      "Blind spot in\noversight design" = "#d62728",
+      "Breach occurred"           = "#1a1a1a"
+    ), name = "Oversight Gap"
+  ) +
+  scale_y_continuous(limits = c(0, 12)) +
+  labs(
+    title    = "Escalating Severity of Behavioural Deviations vs. Oversight Response",
+    subtitle = "Each prior incident received a weaker-than-needed response, allowing the breach to occur",
+    x = NULL, y = "Severity Score (0–10)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    plot.title    = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(colour = "grey50")
+  )
+```
+
+**Why Prior Occasions Didn't Trigger Action:**
+
+1. **Normalization of shadow channels**: The side_huddle was established practice before the Judge arrived. No one questioned its legitimacy.
+
+2. **@Elena faux pas treated as isolated**: The incident was attributed to "individual error" rather than systemic pressure from the merger secrecy. The root cause — agents operating under dual objectives (manage public crisis AND keep merger secret) — was never addressed.
+
+3. **Judge's compliance warnings lacked teeth**: The Judge could issue warnings and withhold approval, but agents could bypass this by posting on personal accounts or through anonymous channels.
+
+4. **Internal deliberations invisible**: Legal-Agent's most consequential decisions were made in `one_on_one_chat` and internal state fields that the Judge could not observe in real time.
+
+5. **Crisis pressure overwhelmed controls**: On June 5, every agent faced existential urgency (MAC clause, stock price, SaltWind deadline). The control mechanisms were designed for a calm environment, not a multi-hour pressure cooker.
+
+---
+
+# 8. Conclusion: Was It a Deliberate Leak or a System Breakdown?
+
+## 8.1 Final Assessment
+
+```{r final-chart, fig.height=6, fig.width=11}
+# Evidence summary radar/lollipop chart
+evidence_df <- tibble(
+  factor = c(
+    "Pre-planned post\nstaged hours in advance",
+    "Legal rationalization\n(bilateral consent clause)",
+    "Social-Manager\nbypassed Judge",
+    "PR-Intern acted on\nverbal GO only",
+    "Anonymous posts\n(new evasive behaviour)",
+    "Judge compliance\nwarnings ignored",
+    "Side huddle\nhid true intent",
+    "Stock/MAC pressure\n(structural driver)"
+  ),
+  deliberate = c(8, 6, 7, 5, 7, 6, 7, 3),
+  breakdown  = c(4, 7, 6, 8, 5, 8, 7, 9)
+) %>%
+  pivot_longer(c(deliberate, breakdown), names_to = "type", values_to = "score") %>%
+  mutate(type = ifelse(type == "deliberate", "Deliberate Leak", "System Breakdown"))
+
+ggplot(evidence_df, aes(x = score, y = fct_rev(factor), colour = type)) +
+  geom_segment(
+    data = evidence_df %>% pivot_wider(names_from = type, values_from = score),
+    aes(x = `Deliberate Leak`, xend = `System Breakdown`,
+        y = fct_rev(factor), yend = fct_rev(factor)),
+    colour = "grey80", linewidth = 1, inherit.aes = FALSE
+  ) +
+  geom_point(size = 5, alpha = 0.9) +
+  scale_colour_manual(values = c("Deliberate Leak" = "#d62728", "System Breakdown" = "#1f77b4"),
+                      name = NULL) +
+  scale_x_continuous(limits = c(0, 10), breaks = 0:10) +
+  labs(
+    title    = "Evidence Weighting: Deliberate Leak vs. System Breakdown",
+    subtitle = "Higher score = stronger evidence for that interpretation (0–10)",
+    x = "Evidence Score", y = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor  = element_blank(),
+    legend.position   = "top",
+    plot.title   = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(colour = "grey50")
+  )
+```
+
+## 8.2 Summary
+
+The evidence supports a **hybrid conclusion**: the embargo breach was **neither purely deliberate nor purely accidental**, but rather the **inevitable outcome of a system under irreconcilable competing pressures**.
+
+**The System Broke Down** because:
+- The Judge was added to the wrong channel (comms_huddle) while real deliberations moved to side_huddle.
+- Internal state deliberations were invisible to oversight.
+- Crisis pressure (MAC clause, SaltWind deadline, stock decline) created objective justification for Legal's "bilateral consent" rationalization.
+- PR-Intern had been so successfully integrated into the execution chain that they acted appropriately given their instructions.
+
+**But Intent Was Present** because:
+- Legal-Agent had been privately deliberating the bilateral consent clause path for over 24 hours before invoking it.
+- Social-Manager explicitly coached PR-Intern to execute on "one GO" without waiting for verification — removing a natural check.
+- The anonymous post campaign on June 5 morning was a deliberate decision to influence public narrative without triggering Judge review.
+
+**Verdict for CivicLoom's Legal Team**: The breach was primarily driven by **Legal-Agent's proactive rationalization** combined with **Social-Manager's execution acceleration**. This was not a random system failure — it was a calculated decision made under extreme pressure by agents who genuinely believed it was the right choice. Whether this constitutes a contractual breach of the embargo depends on whether CivicLoom's verbal consent (confirmed by Legal at 5:01 PM) preceded or followed the actual post (5:19 PM) — a factual question the message logs can resolve.
+
+---
+
+# 9. References
+
+- Wickham, H., & Grolemund, G. (2016). *R for Data Science*. O'Reilly Media.
+- Pedersen, T. L. (2024). *ggraph: An Implementation of Grammar of Graphics for Graphs and Networks*. R package.
+- Csardi, G., & Nepusz, T. (2006). The igraph software package for complex network research. *InterJournal, Complex Systems, 1695*.
+- Slowikowski, K. (2024). *ggrepel: Automatically Position Non-Overlapping Text Labels*. R package.
+- Allaire, J. J., et al. (2024). *Quarto: An Open-Source Technical Publishing System*.
+- Wilke, C. O. (2024). *ggridges: Ridgeline Plots in ggplot2*. R package.
+- Pedersen, T. L., & Robinson, D. (2024). *gganimate: A Grammar of Animated Graphics*. R package.
+

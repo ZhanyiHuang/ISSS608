@@ -59,11 +59,12 @@ ggplot(data=exam_data,
   ggtitle("English scores versus Maths scores for Primary 3")
 ```
 :::
-::::
-
-:::: panel-tabset
 
 ::::
+
+::: panel-tabset
+:::
+
 ```{r}
 #| fig-width: 12
 #| gif-height: 8
@@ -187,15 +188,13 @@ patchwork <- (p1 / p2) | p3
 patchwork & theme_economist()
 ```
 
-
-
-
-
 ```{r}
 pacman::p_load(readxl, gifski, gapminder,
                plotly, gganimate, tidyverse)
 ```
+
 ## Importing the data
+
 ```{r}
 col <- c("Country", "Continent")
 globalPop <- read_xls("/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex03/data/GlobalPopulation.xls",
@@ -212,7 +211,6 @@ globalPop <- read_xls("/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 
   mutate(Year = as.integer(Year))
 ```
 
-
 ```{r}
 col <- c("Country", "Continent")
 globalPop <- read_xls("/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 1/ISSS608/Hands-on_Ex/Hands-on_Ex03/data/GlobalPopulation.xls",
@@ -222,7 +220,9 @@ globalPop <- read_xls("/Users/zhanyi/Desktop/M Y1S2/ISSS608/ISSS608-VAA/project 
 ```
 
 ## Animated Data Visualisation: gganimate methods
+
 ### Building a static population bubble plot
+
 ```{r}
 ggplot(globalPop, aes(x = Old, y = Young, 
                       size = Population, 
@@ -236,8 +236,8 @@ ggplot(globalPop, aes(x = Old, y = Young,
        y = '% Young') 
 ```
 
-
 ### Building the animated bubble plot
+
 ```{r}
 gg <- ggplot(globalPop, 
        aes(x = Old, 
@@ -257,7 +257,9 @@ ggplotly(gg)
 ```
 
 ## Animated Data Visualisation: plotly
+
 ### Building an animated bubble plot: ggplotly() method
+
 ```{r}
 gg <- ggplot(globalPop, 
        aes(x = Old, 
@@ -294,6 +296,3 @@ bp <- globalPop %>%
   layout(showlegend = FALSE)
 bp
 ```
-
-
-
