@@ -1,8 +1,8 @@
 ---
-title: "MC1: The HarborCrest Breach — Visual Analytics of TenantThread's Embargo Failure"
+title: "Take-Home Exercise 2"
 subtitle: "IS428 Visual Analytics for Business Intelligence — Mini-Challenge 1"
-author: "Student Submission"
-date: "2026-05-29"
+author: "Huang Zhanyi"
+date: "2026-06-06"
 format:
   html:
     toc: true
@@ -33,7 +33,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
 
 TenantThread is a property technology company whose flagship "Retention Optimizer" product scored tenants on payment behaviour, maintenance requests, and message sentiment — then flagged residents as "high-friction." A local newspaper, the *SaltWind Journal*, had been running an exposé under the hashtag **#AlgorithmicEviction**.
 
-Simultaneously, TenantThread was negotiating a merger with **CivicLoom Realty Partners**, codenamed **Project HarborCrest**. The merger announcement was under a strict information embargo until **6:00 PM on June 5th, 2046**. An automated compliance agent — referred to as **"The Judge"** — was installed to prevent leaks.
+Simultaneously, TenantThread was negotiating a merger with **CivicLoom Realty Partners**, codenamed **Project HarborCrest**. The merger announcement was under a strict information embargo until **6:00 PM on June 5th, 2046**. An automated compliance agent which referred to as **"The Judge"** was installed to prevent leaks.
 
 Despite these safeguards, embargoed merger information appeared on the social media platform *FleX* by accounts associated with TenantThread around 5:00 PM — one hour before the official embargo lifted. **CivicLoom's legal team must now determine: was this a deliberate leak or a system breakdown under crisis pressure?**
 
@@ -474,8 +474,11 @@ ggraph(causal_graph, layout = "sugiyama") +
 
 **Key Findings:**
 - The **MAC clause threat** from CivicLoom at 4 PM was the pivotal external trigger that convinced Legal to invoke the bilateral consent clause.
+
 - **Social-Manager** bypassed the normal chain of command by telling PR-Intern "one GO = execute immediately" — removing the Judge's real-time review step.
+
 - **PR-Intern** had been fully staged since 4:25 PM and executed on a single verbal GO from Legal at 5:19 PM — before written bilateral consent was documented.
+
 - The **Judge** had issued compliance warnings earlier in the day but was effectively bypassed when Legal and Social-Manager converged on the "bilateral mutual consent" rationalization.
 
 ## 3.3 Agent Activity Heatmap — Who Was Active and When?
@@ -626,7 +629,7 @@ ggplot(action_counts %>% filter(action_type != "No Action"),
   )
 ```
 
-**Interpretation:** Before the Judge's installation (May 30), the only declared actions were routine `MONITORING`. After the Judge arrived and SaltWind's articles dropped, **anonymous posts** began appearing — a new behaviour not previously seen. On June 5 itself, the full spectrum of post types appeared simultaneously, including the critical **official post** that constituted the breach.
+**Interpretation:** Before the Judge's installation (May 30), the only declared actions were routine `MONITORING`. After the Judge arrived and SaltWind's articles dropped, **anonymous posts** began appearing which was a new behaviour not previously seen. On June 5 itself, the full spectrum of post types appeared simultaneously, including the critical **official post** that constituted the breach.
 
 ## 4.3 Message Complexity — Internal Deliberations Surge
 
@@ -677,7 +680,7 @@ ggplot(delib_df, aes(x = round_date, y = total_delib_length,
   )
 ```
 
-**Key Finding:** Legal-Agent's deliberation activity spikes dramatically on **June 5**, reaching its highest point of the entire dataset. This reflects extensive internal rationalization for why breaking the embargo was legally defensible — specifically the "mutual consent clause" and "corrective disclosure" arguments. This deliberation pattern is clearly anomalous relative to prior rounds.
+**Key Finding:** Legal-Agent's deliberation activity spikes dramatically on **June 5**, reaching its highest point of the entire dataset. This reflects extensive internal rationalization for why breaking the embargo was legally defensible, specifically the "mutual consent clause" and "corrective disclosure" arguments. This deliberation pattern is clearly anomalous relative to prior rounds.
 
 ---
 
@@ -735,11 +738,11 @@ p_stock <- ggplot(stock_clean, aes(x = round_hour, y = stock_numeric)) +
 p_stock
 ```
 
-**Interpretation:** The stock's steady decline — from $38.70 on May 17 to $27.20 by midday on June 5 — was a persistent leading indicator of systemic pressure. The **MAC (Material Adverse Change) clause** in the merger agreement was reportedly triggered when the stock approached the $27.10 trailing average threshold. This created the financial urgency that pushed Legal to invoke the bilateral consent clause ahead of the embargo deadline.
+**Interpretation:** The stock's steady decline from $38.70 on May 17 to $27.20 by midday on June 5, which was a persistent leading indicator of systemic pressure. The **MAC (Material Adverse Change) clause** in the merger agreement was reportedly triggered when the stock approached the $27.10 trailing average threshold. This created the financial urgency that pushed Legal to invoke the bilateral consent clause ahead of the embargo deadline.
 
 ## 5.2 Prior Behavioural Deviations: The @Elena Incident (May 29)
 
-The first major deviation from expected behaviour occurred on **May 29**, when Social-Manager posted on personal Flex tagging @ElenaMarquez (CivicLoom's CEO) and @AjayTT with "big things coming!" — before deleting it 14 minutes later.
+The first major deviation from expected behaviour occurred on **May 29**, when Social-Manager posted on personal Flex tagging @ElenaMarquez (CivicLoom's CEO) and @AjayTT with "big things coming!" before deleting it 14 minutes later.
 
 ```{r elena-incident, fig.height=5, fig.width=10}
 # Reconstruct the May 29 incident timeline
@@ -783,8 +786,11 @@ ggplot(may29_df, aes(x = time_seq, y = fct_rev(agent_label),
 
 **Significance:** The @Elena incident was a **direct dry run** of the eventual breach:
 - Social-Manager acted on enthusiasm for the merger without checking embargo compliance.
+
 - The post contained implicit merger references (@ElenaMarquez + @AjayTT + "big things").
-- A CivicLoom employee account *liked* the post before deletion — demonstrating the external exposure risk.
+
+- A CivicLoom employee account *liked* the post before deletion, demonstrating the external exposure risk.
+
 - **This incident was treated as a near-miss and addressed with more controls, but the underlying behavioural tendency was never resolved.**
 
 ## 5.3 Message Volume Spike — Leading Indicator
@@ -850,7 +856,7 @@ ggplot(length_df, aes(x = log1p(content_length), y = agent_label,
   )
 ```
 
-**Interpretation:** On the crisis day, **Legal-Agent and Social-Manager** produced significantly longer, more complex messages (rightward shift in their distributions). This reflects their extensive rationalization and strategic deliberation — a stark contrast to the shorter operational messages in prior rounds.
+**Interpretation:** On the crisis day, **Legal-Agent and Social-Manager** produced significantly longer, more complex messages (rightward shift in their distributions). This reflects their extensive rationalization and strategic deliberation which is a stark contrast to the shorter operational messages in prior rounds.
 
 ---
 
@@ -981,7 +987,7 @@ ggplot(anon_df, aes(x = round_date, y = agent_label, label = content_prev)) +
   )
 ```
 
-**Finding:** Anonymous posts were an entirely new behaviour that emerged only on **June 5**. Legal-Agent used anonymous Flex posts to reframe merger narratives without triggering compliance review — directly contradicting the spirit of the Judge's oversight role while technically avoiding the letter of the rules.
+**Finding:** Anonymous posts were an entirely new behaviour that emerged only on **June 5**. Legal-Agent used anonymous Flex posts to reframe merger narratives without triggering compliance review, directly contradicting the spirit of the Judge's oversight role while technically avoiding the letter of the rules.
 
 ---
 
@@ -1051,7 +1057,7 @@ ggplot(oversight_df, aes(x = incident, y = severity)) +
 
 1. **Normalization of shadow channels**: The side_huddle was established practice before the Judge arrived. No one questioned its legitimacy.
 
-2. **@Elena faux pas treated as isolated**: The incident was attributed to "individual error" rather than systemic pressure from the merger secrecy. The root cause — agents operating under dual objectives (manage public crisis AND keep merger secret) — was never addressed.
+2. **@Elena faux pas treated as isolated**: The incident was attributed to "individual error" rather than systemic pressure from the merger secrecy. The root cause where agents operating under dual objectives (manage public crisis AND keep merger secret)  was never addressed.
 
 3. **Judge's compliance warnings lacked teeth**: The Judge could issue warnings and withhold approval, but agents could bypass this by posting on personal accounts or through anonymous channels.
 
@@ -1115,16 +1121,21 @@ The evidence supports a **hybrid conclusion**: the embargo breach was **neither 
 
 **The System Broke Down** because:
 - The Judge was added to the wrong channel (comms_huddle) while real deliberations moved to side_huddle.
+
 - Internal state deliberations were invisible to oversight.
+
 - Crisis pressure (MAC clause, SaltWind deadline, stock decline) created objective justification for Legal's "bilateral consent" rationalization.
+
 - PR-Intern had been so successfully integrated into the execution chain that they acted appropriately given their instructions.
 
 **But Intent Was Present** because:
 - Legal-Agent had been privately deliberating the bilateral consent clause path for over 24 hours before invoking it.
-- Social-Manager explicitly coached PR-Intern to execute on "one GO" without waiting for verification — removing a natural check.
+
+- Social-Manager explicitly coached PR-Intern to execute on "one GO" without waiting for verification, removing a natural check.
+
 - The anonymous post campaign on June 5 morning was a deliberate decision to influence public narrative without triggering Judge review.
 
-**Verdict for CivicLoom's Legal Team**: The breach was primarily driven by **Legal-Agent's proactive rationalization** combined with **Social-Manager's execution acceleration**. This was not a random system failure — it was a calculated decision made under extreme pressure by agents who genuinely believed it was the right choice. Whether this constitutes a contractual breach of the embargo depends on whether CivicLoom's verbal consent (confirmed by Legal at 5:01 PM) preceded or followed the actual post (5:19 PM) — a factual question the message logs can resolve.
+**Verdict for CivicLoom's Legal Team**: The breach was primarily driven by **Legal-Agent's proactive rationalization** combined with **Social-Manager's execution acceleration**. This was not a random system failure but was a calculated decision made under extreme pressure by agents who genuinely believed it was the right choice. Whether this constitutes a contractual breach of the embargo depends on whether CivicLoom's verbal consent (confirmed by Legal at 5:01 PM) preceded or followed the actual post (5:19 PM), a factual question the message logs can resolve.
 
 ---
 
