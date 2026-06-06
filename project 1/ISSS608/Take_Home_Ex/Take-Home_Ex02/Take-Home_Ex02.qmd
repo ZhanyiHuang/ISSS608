@@ -1,6 +1,5 @@
 ---
 title: "Take-Home Exercise 2"
-subtitle: "IS428 Visual Analytics for Business Intelligence — Mini-Challenge 1"
 author: "Huang Zhanyi"
 date: "2026-06-06" 
 format:
