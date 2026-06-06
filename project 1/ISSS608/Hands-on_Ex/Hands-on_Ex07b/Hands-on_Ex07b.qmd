@@ -334,10 +334,5 @@ ggraph(bigram_graph,
 
 ---
 
-```{r}
-git filter-branch --force --index-filter \
-  'git rm --cached --ignore-unmatch "project 1/ISSS608/.RDataTmp"' \
-  --prune-empty --tag-name-filter cat -- --all
-
-
+```{}
 ```
