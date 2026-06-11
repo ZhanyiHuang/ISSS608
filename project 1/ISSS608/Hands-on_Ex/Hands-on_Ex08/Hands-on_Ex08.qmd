@@ -28,7 +28,9 @@ The following R packages are required for this exercise. The code chunk below ch
 ```{r}
 pacman::p_load(scales, viridis, lubridate, ggthemes,
                gridExtra, readxl, knitr, data.table,
-               CGPfunctions, tidyverse)
+               tidyverse)
+
+eval(parse(text = readLines("https://raw.githubusercontent.com/ibecav/CGPfunctions/master/R/NewggslopegraphY.R")))
 ```
 
 ## Plotting Calendar Heatmap
@@ -298,8 +300,20 @@ rice <- read_csv("data/rice.csv")
 rice %>%
   mutate(Year = factor(Year)) %>%
   filter(Year %in% c(1961, 1980)) %>%
-  newggslopegraph(Year, Yield, Country,
-                  Title = "Rice Yield of Top 11 Asian Counties",
-                  SubTitle = "1961-1980",
-                  Caption = "Prepared by: Dr. Kam Tin Seong")
+  ggplot(aes(x = Year, y = Yield, group = Country, colour = Country)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_text(data = . %>% filter(Year == "1961"),
+            aes(label = paste0(Country, " ", round(Yield, 0))),
+            hjust = 1.15, size = 3) +
+  geom_text(data = . %>% filter(Year == "1980"),
+            aes(label = paste0(Country, " ", round(Yield, 0))),
+            hjust = -0.15, size = 3) +
+  theme_tufte() +
+  theme(legend.position = "none",
+        plot.margin = margin(l = 80, r = 80)) +
+  labs(title = "Rice Yield of Top 11 Asian Counties",
+       subtitle = "1961-1980",
+       caption = "Prepared by: Dr. Kam Tin Seong",
+       x = NULL, y = "Yield")
 ```
