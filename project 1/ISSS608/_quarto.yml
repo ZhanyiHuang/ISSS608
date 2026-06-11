@@ -33,7 +33,9 @@ website:
           - text: "Hands-on Exercise 7a"
             href: "Hands-on_Ex/Hands-on_Ex07a/Hands-on_Ex07a.html"
           - text: "Hands-on Exercise 7b"
-            href: "Hands-on_Ex/Hands-on_Ex07b/Hands-on_Ex07b.html"            
+            href: "Hands-on_Ex/Hands-on_Ex07b/Hands-on_Ex07b.html" 
+          - text: "Hands-on Exercise 8"
+            href: "Hands-on_Ex/Hands-on_Ex08/Hands-on_Ex08.html"            
       - text: "Take-Home Exercise"
         menu:
           - text: "Take-Home Exercise 1 (Technical Report)"
