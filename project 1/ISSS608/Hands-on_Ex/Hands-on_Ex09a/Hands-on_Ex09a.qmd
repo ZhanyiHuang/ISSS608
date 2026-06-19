@@ -29,8 +29,7 @@ pacman::p_load(sf, tmap, tidyverse)
 ### 21.3.2 Importing Geospatial Data into R
 
 ```{r}
-mpsz <- st_read(dsn = "data/geospatial", 
-                layer = "MP14_SUBZONE_WEB_PL")
+mpsz <- st_read(dsn = "data/MP14_SUBZONE_WEB_PL")
 ```
 
 Examine the content of mpsz:
@@ -42,7 +41,7 @@ mpsz
 ### 21.3.3 Importing Attribute Data into R
 
 ```{r}
-popdata <- read_csv("data/aspatial/respopagesextod2011to2020.csv")
+popdata <- read_csv("data/respopagesextod2011to2020.csv")
 ```
 
 ### 21.3.4 Data Preparation
@@ -90,7 +89,7 @@ mpsz_pop2020 <- left_join(mpsz, popdata2020,
 Save the result:
 
 ```{r}
-write_rds(mpsz_pop2020, "data/rds/mpszpop2020.rds")
+write_rds(mpsz_pop2020, "data/mpszpop2020.rds")
 ```
 
 ## 21.4 Choropleth Mapping Geospatial Data Using tmap

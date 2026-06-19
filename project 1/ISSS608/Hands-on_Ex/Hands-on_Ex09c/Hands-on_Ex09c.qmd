@@ -43,7 +43,7 @@ pacman::p_load(sf, tmap, tidyverse)
 Import NGA_wp.rds into R environment:
 
 ```{r}
-NGA_wp <- readRDS("data/rds/NGA_wp.rds")
+NGA_wp <- readRDS("data/NGA_wp.rds")
 ```
 
 ## 23.3 Basic Choropleth Mapping

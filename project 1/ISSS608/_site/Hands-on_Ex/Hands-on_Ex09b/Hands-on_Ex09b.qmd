@@ -43,7 +43,7 @@ The data set use for this hands-on exercise is called SGPools_svy21. The data is
 Import SGPools_svy21.csv into R:
 
 ```{r}
-sgpools <- read_csv("data/aspatial/SGPools_svy21.csv")
+sgpools <- read_csv("data/SGPools_svy21.csv")
 ```
 
 Examine if the data file has been imported correctly:
